@@ -39,6 +39,7 @@ export class UI {
       </div>
       <div id="tooltip" class="tooltip hidden"></div>
       <div id="hint" class="hint">点击发光格子落子 · 拖拽旋转视角 · 滚轮缩放 · R 重开 / U 悔棋 / M 静音</div>
+      <div id="rotate-hint" class="rotate-hint">🔄 横屏体验更佳</div>
       <div id="overlay" class="overlay hidden">
         <div class="overlay-card">
           <div id="over-title" class="over-title">你赢了!</div>

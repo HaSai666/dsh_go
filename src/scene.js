@@ -166,7 +166,36 @@ export function buildScene(container) {
     }
   }
 
+  // 相机自适应:棋盘(含外框)容纳进屏幕较窄维度;并用"近端边角"约束补偿透视放大,
+  // 保证靠近相机的底行格子中心不被裁出屏幕(桌面与手机横竖屏通吃)。
+  function fitCamera(size) {
+    const aspect = window.innerWidth / Math.max(window.innerHeight, 1);
+    const boardWorld = size + 1.4;
+    const hFovHalf = Math.atan(Math.tan((35 * Math.PI) / 360) * aspect);
+    const tanH = Math.tan(hFovHalf);
+    const distW = boardWorld / 2 / (tanH * 0.92);
+    // 手机(窄屏/超宽屏)用更浅的俯角,近端边角垂直方向也能收进屏幕;
+    // 桌面保持既有构图不变。
+    const mobile = aspect < 1.2 || aspect > 2.1;
+    const a = mobile ? 0.47 : 0.635;
+    const b = mobile ? 0.88 : 0.773;
+    const distH = (mobile ? 8.9 : 11.08) * (boardWorld / 13.4);
+    const nearOff = (mobile ? 5.33 : 4.76) * (boardWorld / 13.4);
+    const yNear = (mobile ? 2.7 : 3.66) * (boardWorld / 13.4);
+    const distNearH = nearOff + (boardWorld / 2 - 1.2) / (0.95 * tanH);
+    const distNearV = nearOff + yNear / (0.29925);
+    const d = Math.min(
+      Math.max(distW, distH, mobile ? Math.max(distNearH, distNearV) : 0, 10),
+      60
+    );
+    camera.position.set(0, a * d, b * d);
+    controls.minDistance = d * 0.7;
+    controls.maxDistance = d * 1.9;
+    camera.updateProjectionMatrix();
+  }
+
   buildBase(SIZE);
+  fitCamera(SIZE);
 
   // 棋子几何体:扁圆盘 + 拱顶(车削成形)。
   const pieceGeo = new THREE.LatheGeometry(
@@ -456,11 +485,7 @@ export function buildScene(container) {
     clearPieces();
     clearLegal();
     clearLastMove();
-    const k = size / 12;
-    camera.position.set(0, 9.2 * k, 11.2 * k);
-    controls.minDistance = 10 * k;
-    controls.maxDistance = 24 * k;
-    camera.updateProjectionMatrix();
+    fitCamera(size);
     const half = size / 2 + 3;
     sun.shadow.camera.left = -half;
     sun.shadow.camera.right = half;
@@ -519,6 +544,7 @@ export function buildScene(container) {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
+    fitCamera(curSize); // 旋转屏幕/改变窗口后重新构图
   }
   window.addEventListener('resize', resize);
 

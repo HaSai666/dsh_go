@@ -25,6 +25,15 @@ body {
 
 #app canvas {
   display: block;
+  touch-action: none; /* 触屏手势交给 OrbitControls,避免浏览器缩放干扰 */
+}
+
+button,
+.card,
+.reward-opt,
+.mode-card,
+select {
+  touch-action: manipulation;
 }
 
 #hud {
@@ -561,17 +570,157 @@ body {
 
 @media (max-width: 760px) {
   .top-left {
+    display: block;
+    top: 8px;
+    left: 8px;
+    padding: 5px 9px;
+  }
+  .top-left > div:first-child {
     display: none;
   }
+  .runbar {
+    max-width: 46vw;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 11px;
+    margin-top: 0;
+  }
   .scoreboard {
-    top: 12px;
+    top: 8px;
+    left: auto;
+    right: 8px;
+    transform: none;
+    gap: 9px;
+  }
+  .score {
+    font-size: 15px;
+    min-width: 42px;
+    gap: 5px;
+  }
+  .disc {
+    width: 16px;
+    height: 16px;
+  }
+  .turnbox {
+    font-size: 11px;
+    min-width: 84px;
+    padding: 3px 8px;
   }
   .controls {
     top: auto;
-    bottom: 56px;
-    right: 12px;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
+    right: 10px;
+    gap: 5px;
+    padding: 5px 8px;
+  }
+  .controls select {
+    padding: 6px 4px;
+    font-size: 12px;
+    max-width: 64px;
+  }
+  .controls button {
+    padding: 6px 8px;
+    font-size: 12px;
+    border-radius: 8px;
+  }
+  .cardbar {
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 60px);
+  }
+  .cardbar-label {
+    font-size: 11px;
+    margin-bottom: 5px;
+  }
+  .card {
+    width: 62px;
+    padding: 5px 3px 7px;
+    border-radius: 9px;
+  }
+  .card-emoji {
+    font-size: 19px;
+  }
+  .card-name {
+    font-size: 10px;
+  }
+  .card-order {
+    width: 17px;
+    height: 17px;
+    line-height: 17px;
+    font-size: 10px;
+    top: -6px;
+    right: -6px;
+  }
+  .toast {
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 146px);
+    font-size: 12px;
+    padding: 8px 14px;
+    max-width: 88vw;
+    white-space: normal;
   }
   .hint {
+    display: none;
+  }
+  .home-title {
+    font-size: 34px;
+  }
+  .home-tagline {
+    font-size: 13px;
+    margin-bottom: 24px;
+  }
+  .mode-card {
+    width: 200px;
+    padding: 20px 16px;
+  }
+  .mode-emoji {
+    font-size: 34px;
+  }
+  .mode-name {
+    font-size: 17px;
+  }
+  .overlay-card {
+    padding: 26px 24px;
+  }
+  .over-title {
+    font-size: 24px;
+  }
+  .reward-options {
+    gap: 8px;
+  }
+  .reward-opt {
+    width: 104px;
+    padding: 12px 8px;
+  }
+  .reward-emoji {
+    font-size: 26px;
+  }
+  .rotate-hint {
+    display: block;
+  }
+}
+
+.rotate-hint {
+  display: none;
+  position: fixed;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 4px);
+  transform: translateX(-50%);
+  font-size: 12px;
+  opacity: 0.6;
+  pointer-events: none;
+  z-index: 40;
+}
+
+@media (max-width: 760px) {
+  .top-left {
+    display: block;
+    top: 8px;
+    left: 8px;
+    padding: 5px 9px;
+  }
+}
+
+@media (orientation: landscape) and (max-width: 900px) {
+  .rotate-hint {
     display: none;
   }
 }

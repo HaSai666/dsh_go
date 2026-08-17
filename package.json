@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "qa": "node debug-headless.mjs && node analyze-shots.mjs"
+    "qa": "node debug-headless.mjs && node analyze-shots.mjs && node mobile-smoke.mjs"
   },
   "dependencies": {
     "three": "^0.180.0"

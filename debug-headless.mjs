@@ -87,9 +87,11 @@ async function autoPlayMoves(n) {
     });
     if (!mv) break;
     await clickCell(mv[0], mv[1]);
-    // 等电脑应手完整结束(含思考/打牌动画),回到玩家回合再继续
+    // 等电脑应手完整结束(含思考/打牌动画);对局提前结束也视为完成
     await page.waitForFunction(
-      () => window.__game.phase === 'idle' && window.__game.turn === 1,
+      () =>
+        (window.__game.phase === 'idle' && window.__game.turn === 1) ||
+        window.__game.phase === 'over',
       null,
       { timeout: 25000 }
     );
@@ -320,6 +322,15 @@ await page.evaluate(() => window.__ui.clearCardSelection());
 
 console.log('→ 无尽模式自动对弈');
 await autoPlayMoves(2);
+// 先快照轨迹(重开会清空),再处理对局可能提前结束的情况
+const traceSnapshot = await page.evaluate(() =>
+  window.__game.trace.map((e) => ({ m: e.mark, a: e.args }))
+);
+await page.evaluate(() => {
+  const g = window.__game;
+  if (g.phase === 'over') g.newGame();
+});
+await page.waitForTimeout(500);
 // 每回合补满手牌:玩家补到 4,敌方补到 5
 const refillInfo = await page.evaluate(() => ({
   hand: window.__game.hands[1].length,
@@ -329,10 +340,6 @@ if (refillInfo.hand !== 4 || refillInfo.aiHand !== 5) {
   console.log(`❌ 补满手牌异常: hand=${refillInfo.hand} aiHand=${refillInfo.aiHand}`);
   process.exit(1);
 }
-// 此时轨迹里必然有 think 与电脑落子(之后的开局会清空轨迹,提前快照)
-const traceSnapshot = await page.evaluate(() =>
-  window.__game.trace.map((e) => ({ m: e.mark, a: e.args }))
-);
 
 console.log('→ 强制出牌(💥爆裂:落点 8 邻域敌子全翻)');
 await page.evaluate(() => {
