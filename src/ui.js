@@ -148,14 +148,14 @@ export class UI {
     this.els.diff.style.display = on ? 'none' : '';
   }
 
-  setRunInfo(level, maxLevel, relics, enemyText = '') {
+  setRunInfo(level, relics, enemyText = '') {
     if (!this.runMode) {
       this.els.runbar.classList.add('hidden');
       return;
     }
     this.els.runbar.classList.remove('hidden');
     const relicsText = relics.map((r) => RELIC_META[r].emoji).join(' ');
-    this.els.runbar.textContent = `肉鸽闯关 ${level}/${maxLevel}${relicsText ? ' ' + relicsText : ''}${enemyText ? ' · ' + enemyText : ''}`;
+    this.els.runbar.textContent = `无尽 · 第 ${level} 关${relicsText ? ' ' + relicsText : ''}${enemyText ? ' · ' + enemyText : ''}`;
   }
 
   renderHand(hand, selectable) {
@@ -256,7 +256,7 @@ export class UI {
   showRunOver(level, score) {
     this.els.overTitle.textContent = '闯关失败 💔';
     this.els.overScore.textContent = score;
-    this.els.overSub.textContent = `倒在第 ${level} 关 · 遗物和卡牌都丢了,再闯一次!`;
+    this.els.overSub.textContent = `无尽模式 · 止步第 ${level} 关 · 遗物和卡牌都丢了,再闯一次!`;
     this.els.again.textContent = '再闯一次';
     this.els.overlay.classList.remove('hidden');
   }

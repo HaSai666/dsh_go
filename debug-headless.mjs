@@ -558,7 +558,7 @@ if (!l4Ok) {
   process.exit(1);
 }
 
-console.log('→ 终关胜利(验证通关庆祝)');
+console.log('→ 无尽模式验证(第 4 关 → 第 5 关,特权持续递增)');
 await page.evaluate(() => {
   const { BLACK, WHITE } = window.__consts;
   const g = window.__game;
@@ -578,17 +578,31 @@ await page.evaluate(() => {
   window.__ctx.syncBoard(g.board);
   g.commitMove(3, 6, BLACK, []);
 });
-// 终关胜利:显示通关庆祝面板(而非战利品)
+// 第 4 关胜利 → 战利品面板(无尽模式无通关庆祝)
 await page.waitForFunction(
-  () => {
-    const o = document.getElementById('overlay');
-    const t = document.getElementById('over-title');
-    return o && !o.classList.contains('hidden') && t.textContent.includes('通关成功');
-  },
+  () => !document.getElementById('reward').classList.contains('hidden'),
   null,
   { timeout: 20000 }
 );
-console.log('→ 终关通关庆祝面板 ✅');
+await page.locator('#reward-options .reward-opt').first().click();
+await page.waitForTimeout(1500);
+const l5 = await page.evaluate(() => {
+  const g = window.__game;
+  let white = 0;
+  for (const row of g.board) {
+    for (const v of row) {
+      if (v === 2) white++;
+    }
+  }
+  return { level: g.run.level, aiHand: g.hands[2].length, white };
+});
+// 第 5 关:手牌+3 → 敌方手牌 6;开局+4 子 → 白子 = 阵型白子(2/4) + 4
+const l5Ok = l5.level === 5 && l5.aiHand === 6 && (l5.white === 6 || l5.white === 8);
+console.log(`→ 第 5 关特权校验: level=${l5.level} aiHand=${l5.aiHand} white=${l5.white}`);
+if (!l5Ok) {
+  console.log('❌ 无尽模式特权递增异常');
+  process.exit(1);
+}
 
 const traceOk =
   traceSnapshot.some((e) => e.m === 'think') &&

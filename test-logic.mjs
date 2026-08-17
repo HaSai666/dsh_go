@@ -64,6 +64,7 @@ while (!isGameOver(board) && steps < 200) {
   steps++;
 }
 check('整局正常结束(无异常)', isGameOver(board), `steps=${steps}`);
+check('整局步数足够(≥40,防止瞬间终局)', steps >= 40);
 const end = countDiscs(board);
 check(`终局子数合计 ${SIZE * SIZE}`, end.black + end.white === SIZE * SIZE);
 

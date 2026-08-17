@@ -2,7 +2,10 @@
 // 卡牌模式下由 chooseCards 决定打哪几张牌。
 import {
   BLACK,
+  EMPTY,
   SIZE,
+  DIRS,
+  inBounds,
   countDiscs,
   legalMoves,
   applyMove,
@@ -38,6 +41,25 @@ function makeWeights(size) {
 
 const W = makeWeights(SIZE);
 
+// 前沿子数:与空格相邻的己方棋子(中盘是负担,标准黑白棋启发项)。
+function frontierCount(board, player) {
+  let n = 0;
+  for (let r = 0; r < SIZE; r++) {
+    for (let c = 0; c < SIZE; c++) {
+      if (board[r][c] !== player) continue;
+      for (const [dr, dc] of DIRS) {
+        const rr = r + dr;
+        const cc = c + dc;
+        if (inBounds(rr, cc) && board[rr][cc] === EMPTY) {
+          n++;
+          break;
+        }
+      }
+    }
+  }
+  return n;
+}
+
 function evaluate(board, player) {
   const opp = opponent(player);
   let s = 0;
@@ -48,11 +70,13 @@ function evaluate(board, player) {
       else if (v === opp) s -= W[r][c];
     }
   }
-  // 机动性:可选落点数差,中盘权重高(经典黑白棋评估项)。
+  // 机动性(可选落点数差)+ 前沿惩罚,中盘权重高。
   const counts = countDiscs(board);
   const filled = counts.black + counts.white;
-  if (filled <= Math.floor(SIZE * SIZE * 0.65)) {
-    s += 2 * (legalMoves(board, player).length - legalMoves(board, opp).length);
+  const empty = SIZE * SIZE - filled;
+  if (empty >= 12) {
+    s += 3 * (legalMoves(board, player).length - legalMoves(board, opp).length);
+    s -= 1.5 * (frontierCount(board, player) - frontierCount(board, opp));
   }
   return s;
 }
@@ -116,7 +140,7 @@ function bestAtDepth(board, player, depth, deadline = Infinity) {
 }
 
 // difficulty: easy | normal | hard
-export function chooseMove(board, player, difficulty, timeMs = 700) {
+export function chooseMove(board, player, difficulty, timeMs = 900) {
   const moves = legalMoves(board, player);
   if (moves.length === 0) return null;
 
@@ -136,7 +160,7 @@ export function chooseMove(board, player, difficulty, timeMs = 700) {
   const deadline = start + timeMs;
   const counts = countDiscs(board);
   const empties = SIZE * SIZE - counts.black - counts.white;
-  const maxDepth = empties <= 10 ? empties : 8;
+  const maxDepth = empties <= 10 ? empties : 10;
   let move = null;
   for (let d = 1; d <= maxDepth; d++) {
     try {
@@ -155,18 +179,19 @@ export function chooseCards(board, hand, player, r, c, difficulty = 'normal') {
   const opp = opponent(player);
   const counts = countDiscs(board);
   const oppCount = opp === BLACK ? counts.black : counts.white;
+  const empty = SIZE * SIZE - counts.black - counts.white;
   const adj = cardBlast(board, r, c, player).length;
   const cap = difficulty === 'hard' ? 3 : difficulty === 'normal' ? 2 : 1;
   const picks = [];
   for (const id of hand) {
     if (picks.length >= cap) break;
-    if (id === 'blast' && adj >= 2) picks.push(id);
-    else if (id === 'lucky' && oppCount >= 4) picks.push(id);
-    else if (id === 'chain' && oppCount >= 6) picks.push(id);
+    if (id === 'blast' && adj >= 1) picks.push(id);
+    else if (id === 'lucky' && oppCount >= 6) picks.push(id);
+    else if (id === 'chain' && oppCount >= 8) picks.push(id);
     else if (id === 'seed' && cardSeed(board, player)) picks.push(id);
-    else if (id === 'shield' && oppCount >= 18) picks.push(id);
-    else if (id === 'bomb' && oppCount >= 14) picks.push(id);
-    else if (id === 'combo' && difficulty !== 'easy' && Math.random() < 0.5) picks.push(id);
+    else if (id === 'shield' && (oppCount >= 20 || empty <= 12)) picks.push(id);
+    else if (id === 'bomb' && oppCount >= 16) picks.push(id);
+    else if (id === 'combo' && difficulty === 'hard' && hand.length >= 2 && Math.random() < 0.6) picks.push(id);
     else if (id === 'echo' && picks.length > 0) picks.push(id); // 回响重复上一张
   }
   return picks;

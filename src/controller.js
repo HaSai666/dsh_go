@@ -35,13 +35,24 @@ import { chooseMove, chooseCards } from './ai.js';
 const delay = (ms) =>
   new Promise((r) => setTimeout(r, ms * (window.__QA_SLOWMO || 1)));
 
-// 肉鸽各关敌方配置:引擎强度 + 特权(手牌加成/磁石/开局加子),共 4 关。
-const RUN_LEVELS = [
-  { diff: 'normal', handBonus: 1, magnet: false, extraDiscs: [], budget: 420 },
-  { diff: 'hard', handBonus: 1, magnet: true, extraDiscs: [], budget: 500 },
-  { diff: 'hard', handBonus: 2, magnet: true, extraDiscs: [[4, 0], [7, 11]], budget: 700 },
-  { diff: 'hard', handBonus: 2, magnet: true, extraDiscs: [[4, 0], [7, 11], [0, 7]], budget: 900 },
+// 无尽模式:敌方特权按关卡公式无限递增。
+const EXTRA_SPOTS = [
+  [0, 4], [0, 7], [4, 0], [7, 0],
+  [11, 4], [11, 7], [4, 11], [7, 11],
+  [0, 5], [0, 6], [5, 0], [6, 0],
+  [11, 5], [11, 6], [5, 11], [6, 11],
 ];
+
+function runCfgFor(level) {
+  const l = Math.max(1, level);
+  return {
+    diff: 'hard',
+    handBonus: Math.min(Math.ceil(l / 2), 3), // 1,1,2,2,3,3...
+    magnet: l >= 2,
+    extraDiscs: l >= 3 ? Math.min(2 + (l - 3), 10) : 0, // 2,3,4...封顶 10
+    budget: Math.min(600 + (l - 1) * 200, 2000), // 600,800,1000...封顶 2000ms
+  };
+}
 
 export class Game {
   constructor(ctx, ui, audio) {
@@ -113,7 +124,7 @@ export class Game {
   start(mode) {
     this.mode = mode;
     if (mode === 'cards') {
-      this.run = { level: 1, maxLevel: 4, relics: [], bonus: [] };
+      this.run = { level: 1, relics: [], bonus: [] }; // 无尽:失败即止,连关数无上限
       this.ui.setRunMode(true);
     } else {
       this.run = null;
@@ -139,7 +150,7 @@ export class Game {
   // ---------- 肉鸽闯关 ----------
 
   runCfg() {
-    return this.run ? RUN_LEVELS[Math.min(this.run.level - 1, RUN_LEVELS.length - 1)] : null;
+    return this.run ? runCfgFor(this.run.level) : null;
   }
 
   aiDifficulty() {
@@ -153,7 +164,7 @@ export class Game {
     const parts = [];
     if (cfg.handBonus) parts.push(`手牌+${cfg.handBonus}`);
     if (cfg.magnet) parts.push('磁石');
-    if (cfg.extraDiscs.length) parts.push(`开局+${cfg.extraDiscs.length}子`);
+    if (cfg.extraDiscs) parts.push(`开局+${cfg.extraDiscs}子`);
     return parts.length ? `敌方特权 · ${parts.join(' · ')}` : '';
   }
 
@@ -253,9 +264,11 @@ export class Game {
       for (let i = 0; i < n; i++) drawCard(this.hands[BLACK]);
       const aiN = 3 + this.runCfg().handBonus;
       for (let i = 0; i < aiN; i++) drawCard(this.hands[WHITE]);
-      // 敌方开局加子特权(位置避开开局阵型,落在边线上)
-      for (const [r, c] of this.runCfg().extraDiscs) {
-        this.board[r][c] = WHITE;
+      // 敌方开局加子特权:从预设边线位依次放置(避开开局阵型)
+      const cfg = this.runCfg();
+      for (let i = 0; i < Math.min(cfg.extraDiscs, EXTRA_SPOTS.length); i++) {
+        const [r, c] = EXTRA_SPOTS[i];
+        if (this.board[r][c] === EMPTY) this.board[r][c] = WHITE;
       }
     }
     this.turn = BLACK;
@@ -271,7 +284,7 @@ export class Game {
     this.ui.setCardsMode(this.mode === 'cards');
     this.ui.setRunMode(this.mode === 'cards');
     if (this.run) {
-      this.ui.setRunInfo(this.run.level, this.run.maxLevel, this.run.relics, this.enemyPerksText());
+      this.ui.setRunInfo(this.run.level, this.run.relics, this.enemyPerksText());
     }
     this.ui.clearCardSelection();
     this.updateScore();
@@ -279,7 +292,7 @@ export class Game {
     this.audio.click();
     this.ui.toast(
       this.mode === 'cards'
-        ? `第 ${this.run.level}/${this.run.maxLevel} 关${this.enemyPerksText() ? ' · ' + this.enemyPerksText() : ''}:先点手牌排队(顺序即触发顺序),再落子!`
+        ? `第 ${this.run.level} 关${this.enemyPerksText() ? ' · ' + this.enemyPerksText() : ''}:先点手牌排队(顺序即触发顺序),再落子!`
         : '新的一局,黑棋先行'
     );
   }
@@ -628,16 +641,12 @@ export class Game {
     }
     if (gen !== this.generation) return;
 
-    // 肉鸽闯关:过关进入战利品三选一(末关通关直接庆祝),失败整局重来(平局算过关)
+    // 无尽闯关:过关进入战利品三选一,失败整局重来(平局算过关)
     if (this.mode === 'cards' && this.run) {
       const scoreText = `黑 ${blackScore} : ${whiteScore} 白`;
       if (winner === BLACK || winner === null) {
         this.audio.win();
-        if (this.run.level >= this.run.maxLevel) {
-          this.ui.showRunComplete(scoreText);
-        } else {
-          this.ui.showLevelClear(this.run.level, scoreText, this.rewardOptions());
-        }
+        this.ui.showLevelClear(this.run.level, scoreText, this.rewardOptions());
       } else {
         this.audio.lose();
         this.ui.showRunOver(this.run.level, scoreText);
