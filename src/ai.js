@@ -41,30 +41,43 @@ function makeWeights(size) {
 
 const W = makeWeights(SIZE);
 
+const wCache = { size: 0, w: null };
+
+function weightsFor(size) {
+  if (wCache.size !== size) {
+    wCache.size = size;
+    wCache.w = makeWeights(size);
+  }
+  return wCache.w;
+}
+
 // 前沿子数:与空格相邻的己方棋子(中盘是负担,标准黑白棋启发项)。
 function frontierCount(board, player) {
-  let n = 0;
-  for (let r = 0; r < SIZE; r++) {
-    for (let c = 0; c < SIZE; c++) {
+  const n = board.length;
+  let cnt = 0;
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
       if (board[r][c] !== player) continue;
       for (const [dr, dc] of DIRS) {
         const rr = r + dr;
         const cc = c + dc;
-        if (inBounds(rr, cc) && board[rr][cc] === EMPTY) {
-          n++;
+        if (inBounds(rr, cc, n) && board[rr][cc] === EMPTY) {
+          cnt++;
           break;
         }
       }
     }
   }
-  return n;
+  return cnt;
 }
 
 function evaluate(board, player) {
+  const n = board.length;
+  const W = weightsFor(n);
   const opp = opponent(player);
   let s = 0;
-  for (let r = 0; r < SIZE; r++) {
-    for (let c = 0; c < SIZE; c++) {
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
       const v = board[r][c];
       if (v === player) s += W[r][c];
       else if (v === opp) s -= W[r][c];
@@ -73,7 +86,7 @@ function evaluate(board, player) {
   // 机动性(可选落点数差)+ 前沿惩罚,中盘权重高。
   const counts = countDiscs(board);
   const filled = counts.black + counts.white;
-  const empty = SIZE * SIZE - filled;
+  const empty = n * n - filled;
   if (empty >= 12) {
     s += 3 * (legalMoves(board, player).length - legalMoves(board, opp).length);
     s -= 1.5 * (frontierCount(board, player) - frontierCount(board, opp));
@@ -83,10 +96,11 @@ function evaluate(board, player) {
 
 // 走法排序:角优先,其次翻子多 —— 大幅提升剪枝效率。
 function orderedMoves(board, player, moves) {
+  const n = board.length;
   return moves
     .map((m) => {
       const [r, c] = m;
-      const corner = (r === 0 || r === SIZE - 1) && (c === 0 || c === SIZE - 1);
+      const corner = (r === 0 || r === n - 1) && (c === 0 || c === n - 1);
       const flips = flipsFor(board, r, c, player).length;
       return { m, key: (corner ? 1000 : 0) + flips };
     })
@@ -159,7 +173,7 @@ export function chooseMove(board, player, difficulty, timeMs = 900) {
   const start = performance.now();
   const deadline = start + timeMs;
   const counts = countDiscs(board);
-  const empties = SIZE * SIZE - counts.black - counts.white;
+  const empties = board.length * board.length - counts.black - counts.white;
   const maxDepth = empties <= 10 ? empties : 10;
   let move = null;
   for (let d = 1; d <= maxDepth; d++) {
@@ -179,7 +193,7 @@ export function chooseCards(board, hand, player, r, c, difficulty = 'normal') {
   const opp = opponent(player);
   const counts = countDiscs(board);
   const oppCount = opp === BLACK ? counts.black : counts.white;
-  const empty = SIZE * SIZE - counts.black - counts.white;
+  const empty = board.length * board.length - counts.black - counts.white;
   const adj = cardBlast(board, r, c, player).length;
   const cap = difficulty === 'hard' ? 3 : difficulty === 'normal' ? 2 : 1;
   const picks = [];

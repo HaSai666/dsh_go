@@ -27,7 +27,6 @@ import {
   CARD_META,
   RELIC_POOL,
   RELIC_META,
-  HAND_MAX,
 } from './game.js';
 import { chooseMove, chooseCards } from './ai.js';
 
@@ -35,23 +34,33 @@ import { chooseMove, chooseCards } from './ai.js';
 const delay = (ms) =>
   new Promise((r) => setTimeout(r, ms * (window.__QA_SLOWMO || 1)));
 
-// 无尽模式:敌方特权按关卡公式无限递增。
-const EXTRA_SPOTS = [
-  [0, 4], [0, 7], [4, 0], [7, 0],
-  [11, 4], [11, 7], [4, 11], [7, 11],
-  [0, 5], [0, 6], [5, 0], [6, 0],
-  [11, 5], [11, 6], [5, 11], [6, 11],
-];
-
+// 无尽模式:敌方特权按关卡公式无限递增;棋盘随关卡增大。
 function runCfgFor(level) {
   const l = Math.max(1, level);
   return {
     diff: 'hard',
-    handBonus: Math.min(Math.ceil(l / 2), 3), // 1,1,2,2,3,3...
+    handBonus: Math.min(Math.ceil(l / 2), 6), // 1,1,2,2,3,3...封顶 6(敌方手牌上限 4+6=10)
     magnet: l >= 2,
     extraDiscs: l >= 3 ? Math.min(2 + (l - 3), 10) : 0, // 2,3,4...封顶 10
     budget: Math.min(600 + (l - 1) * 200, 2000), // 600,800,1000...封顶 2000ms
   };
+}
+
+// 棋盘尺寸:12×12 起步,每关 +1,封顶 18×18。
+function boardSizeFor(level) {
+  return Math.min(12 + Math.max(0, level - 1), 18);
+}
+
+// 敌方开局加子位置:四边中段交错(避开开局阵型与角)。
+function extraSpotsFor(size) {
+  const spots = [];
+  for (let d = 2; d < size - 2 && spots.length < 16; d += 2) {
+    spots.push([0, d]);
+    spots.push([d, 0]);
+    spots.push([size - 1, size - 1 - d]);
+    spots.push([size - 1 - d, size - 1]);
+  }
+  return spots;
 }
 
 export class Game {
@@ -71,7 +80,7 @@ export class Game {
     this.generation = 0;
     this.difficulty = 'normal';
     this.trace = []; // 调试轨迹:关键事件时间线,供无头 QA 定点抓拍
-    this.run = null; // 肉鸽闯关状态: { level, maxLevel, relics, bonus }
+    this.run = null; // 无尽闯关状态: { level, relics, bonus, handCap }
 
     const dom = ctx.renderer.domElement;
     let downX = 0;
@@ -124,7 +133,7 @@ export class Game {
   start(mode) {
     this.mode = mode;
     if (mode === 'cards') {
-      this.run = { level: 1, relics: [], bonus: [] }; // 无尽:失败即止,连关数无上限
+      this.run = { level: 1, relics: [], bonus: [], handCap: 4 }; // 无尽:失败即止,连关数无上限
       this.ui.setRunMode(true);
     } else {
       this.run = null;
@@ -172,20 +181,28 @@ export class Game {
     const opts = [];
     const relic = RELIC_POOL[Math.floor(Math.random() * RELIC_POOL.length)];
     opts.push({ kind: 'relic', id: relic.id });
-    for (let i = 0; i < 2; i++) {
-      const card = CARD_POOL[Math.floor(Math.random() * CARD_POOL.length)];
-      opts.push({ kind: 'card', id: card.id });
+    // 核心成长项:手牌上限(封顶 10)
+    if (this.run.handCap < 10) {
+      opts.push({ kind: 'handcap' });
     }
+    const card = CARD_POOL[Math.floor(Math.random() * CARD_POOL.length)];
+    opts.push({ kind: 'card', id: card.id });
     return opts;
   }
 
   applyReward(opt) {
     if (opt.kind === 'relic') {
-      if (!this.run.relics.includes(opt.id)) this.run.relics.push(opt.id);
+      if (!this.run.relics.includes(opt.id)) {
+        this.run.relics.push(opt.id);
+        if (opt.id === 'hat') this.run.handCap += 1; // 🎩手牌大师:手牌上限 +1
+      }
       this.ui.toast(`获得遗物 ${RELIC_META[opt.id].emoji} ${RELIC_META[opt.id].name}!`, 2200);
+    } else if (opt.kind === 'handcap') {
+      this.run.handCap += 1;
+      this.ui.toast(`🀄 手牌上限 +1(现在 ${this.run.handCap}),每回合补满!`, 2200);
     } else {
-      this.run.bonus.push(opt.id);
-      this.ui.toast(`获得卡牌 ${CARD_META[opt.id].emoji} ${CARD_META[opt.id].name},加入下关手牌!`, 2200);
+      this.hands[BLACK].push(opt.id);
+      this.ui.toast(`获得卡牌 ${CARD_META[opt.id].emoji} ${CARD_META[opt.id].name},立即入手!`, 2200);
     }
     this.audio.win();
   }
@@ -229,11 +246,23 @@ export class Game {
 
   // ---------- 手牌 ----------
 
-  draw(player) {
-    if (this.mode !== 'cards') return null;
-    const card = drawCard(this.hands[player], HAND_MAX);
-    if (card && player === BLACK) this.audio.cardDraw();
-    return card;
+  handCapFor(player) {
+    if (this.mode !== 'cards' || !this.run) return 0;
+    if (player === BLACK) return this.run.handCap + (this.run.relics.includes('hat') ? 1 : 0);
+    return 4 + this.runCfg().handBonus;
+  }
+
+  // 每回合开始补满手牌(🍀幸运草:30% 额外多补 1 张)。
+  refill(player) {
+    if (this.mode !== 'cards' || !this.run) return;
+    const cap = this.handCapFor(player);
+    const lucky = player === BLACK && this.run.relics.includes('clover') && Math.random() < 0.3;
+    const target = cap + (lucky ? 1 : 0);
+    while (this.hands[player].length < target) {
+      drawCard(this.hands[player], target + 1);
+    }
+    if (player === BLACK) this.audio.cardDraw();
+    return target;
   }
 
   consumeCards(player, cards) {
@@ -249,25 +278,24 @@ export class Game {
   newGame() {
     this.generation++;
     this.trace = [];
-    // 经典模式固定经典开局;肉鸽每关随机抽取一种开局阵型(敌方初始排列丰富化)
+    // 经典模式固定 12×12 经典开局;无尽每关棋盘增大 + 随机开局阵型
+    const size = this.mode === 'cards' && this.run ? boardSizeFor(this.run.level) : 12;
     this.board =
       this.mode === 'cards' && this.run
-        ? spawnBoard(BOARD_PATTERNS[Math.floor(Math.random() * BOARD_PATTERNS.length)])
-        : initialBoard();
+        ? spawnBoard(BOARD_PATTERNS[Math.floor(Math.random() * BOARD_PATTERNS.length)], size)
+        : initialBoard(size);
+    this.ctx.resizeBoard(size);
     this.hands = { [BLACK]: [], [WHITE]: [] };
     this.shieldOwner = null;
     if (this.mode === 'cards' && this.run) {
-      // 每关重置手牌:玩家=基础3 + 🎩手牌大师 +2 + 战利品卡;敌方=基础3 + 特权加成
-      const n = 3 + (this.run.relics.includes('hat') ? 2 : 0);
-      for (const id of this.run.bonus) this.hands[BLACK].push(id);
-      this.run.bonus = [];
-      for (let i = 0; i < n; i++) drawCard(this.hands[BLACK]);
-      const aiN = 3 + this.runCfg().handBonus;
-      for (let i = 0; i < aiN; i++) drawCard(this.hands[WHITE]);
+      // 开局补满双方手牌(上限:玩家 handCap / 敌方 4+特权)
+      this.refill(BLACK);
+      this.refill(WHITE);
       // 敌方开局加子特权:从预设边线位依次放置(避开开局阵型)
       const cfg = this.runCfg();
-      for (let i = 0; i < Math.min(cfg.extraDiscs, EXTRA_SPOTS.length); i++) {
-        const [r, c] = EXTRA_SPOTS[i];
+      const spots = extraSpotsFor(size);
+      for (let i = 0; i < Math.min(cfg.extraDiscs, spots.length); i++) {
+        const [r, c] = spots[i];
         if (this.board[r][c] === EMPTY) this.board[r][c] = WHITE;
       }
     }
@@ -284,7 +312,7 @@ export class Game {
     this.ui.setCardsMode(this.mode === 'cards');
     this.ui.setRunMode(this.mode === 'cards');
     if (this.run) {
-      this.ui.setRunInfo(this.run.level, this.run.relics, this.enemyPerksText());
+      this.ui.setRunInfo(this.run.level, this.board.length, this.run.relics, this.run.handCap, this.enemyPerksText());
     }
     this.ui.clearCardSelection();
     this.updateScore();
@@ -292,7 +320,7 @@ export class Game {
     this.audio.click();
     this.ui.toast(
       this.mode === 'cards'
-        ? `第 ${this.run.level} 关${this.enemyPerksText() ? ' · ' + this.enemyPerksText() : ''}:先点手牌排队(顺序即触发顺序),再落子!`
+        ? `第 ${this.run.level} 关 · ${this.board.length}×${this.board.length}${this.enemyPerksText() ? ' · ' + this.enemyPerksText() : ''}:每回合补满手牌,选牌排队后落子!`
         : '新的一局,黑棋先行'
     );
   }
@@ -527,7 +555,7 @@ export class Game {
         this.phase = 'idle';
         this.ui.setLocked(false);
         this.ctx.setLegal(moves);
-        if (this.mode === 'cards' && !isFirst) this.draw(BLACK);
+        if (this.mode === 'cards' && !isFirst) this.refill(BLACK);
         if (this.mode === 'cards') this.ui.renderHand(this.hands[BLACK], true);
       } else {
         this.scheduleAI();
@@ -552,7 +580,7 @@ export class Game {
       this.setTurnUi();
       this.ctx.setLegal(next);
       if (this.mode === 'cards') {
-        this.draw(BLACK);
+        this.refill(BLACK);
         this.ui.renderHand(this.hands[BLACK], true);
       }
     } else {
@@ -569,7 +597,7 @@ export class Game {
     this.setTurnUi();
     this.ui.setLocked(true);
     if (this.mode === 'cards') {
-      this.draw(WHITE);
+      this.refill(WHITE);
       this.ui.renderAiHand(this.hands[WHITE].length);
     }
     setTimeout(() => {

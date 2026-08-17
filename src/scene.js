@@ -10,12 +10,14 @@ const CELL = 1;
 const CELL_Y = 0.215; // 格子表面高度
 const PIECE_Y = CELL_Y + 0.05; // 棋子底面:与格面拉开 0.05,任何深度精度下都不共面
 
+let curSize = SIZE; // 当前棋盘尺寸(无尽模式随关卡增长)
+
 function cellX(c) {
-  return c - (SIZE - 1) / 2;
+  return c - (curSize - 1) / 2;
 }
 
 function cellZ(r) {
-  return r - (SIZE - 1) / 2;
+  return r - (curSize - 1) / 2;
 }
 
 export function buildScene(container) {
@@ -76,10 +78,14 @@ export function buildScene(container) {
 
   const boardGroup = new THREE.Group();
   scene.add(boardGroup);
+  const baseGroup = new THREE.Group(); // 外框/底板/格子:换尺寸时整体重建
+  const pieceGroup = new THREE.Group(); // 棋子/幽灵/标记:跨尺寸保留
+  boardGroup.add(baseGroup);
+  boardGroup.add(pieceGroup);
 
   // 大桌面:接阴影,让棋盘有"摆在家具上"的感觉。
   const table = new THREE.Mesh(
-    new THREE.PlaneGeometry(60, 60),
+    new THREE.PlaneGeometry(80, 80),
     new THREE.MeshStandardMaterial({ color: 0x241a12, roughness: 0.95 })
   );
   table.rotation.x = -Math.PI / 2;
@@ -87,65 +93,80 @@ export function buildScene(container) {
   table.receiveShadow = true;
   scene.add(table);
 
-  // 胡桃木外框:四块实木墙拼成真正的"框"(绝不能用实心盒子——
-  // 实心盒子的顶面会与棋盘面板完全共面,导致整盘 z-fighting 频闪)。
+  // 胡桃木外框材质(共享)。
   const frameMat = new THREE.MeshStandardMaterial({
     color: 0x3a2718,
     roughness: 0.55,
     metalness: 0.05,
   });
-  const frameOuter = SIZE + 1.4; // 9.4
-  const wallW = 0.45;
-  const wallH = 0.62;
-  const wallY = 0.01; // 顶面 0.32,高于格面 0.215,形成围边
-  const wallCenter = (frameOuter - wallW) / 2; // ±4.475
-  const wallLong = new THREE.BoxGeometry(frameOuter, wallH, wallW);
-  const wallShort = new THREE.BoxGeometry(wallW, wallH, frameOuter - 2 * wallW);
-  const frameGroup = new THREE.Group();
-  for (const [x, z, geo] of [
-    [0, wallCenter, wallLong],
-    [0, -wallCenter, wallLong],
-    [wallCenter, 0, wallShort],
-    [-wallCenter, 0, wallShort],
-  ]) {
-    const wall = new THREE.Mesh(geo, frameMat);
-    wall.position.set(x, wallY, z);
-    wall.castShadow = true;
-    wall.receiveShadow = true;
-    frameGroup.add(wall);
-  }
-  boardGroup.add(frameGroup);
 
-  // 绒布底板:下沉 0.145,格子像浮雕一样浮在底板上,间距远大于任何深度缓冲分辨率。
-  const slab = new THREE.Mesh(
-    new RoundedBoxGeometry(SIZE + 0.35, 0.26, SIZE + 0.35, 4, 0.1),
-    new THREE.MeshStandardMaterial({ color: 0x1f4433, roughness: 0.92 })
-  );
-  slab.position.y = -0.06; // 顶面 0.07,与格面 0.215 拉开 0.145
-  slab.receiveShadow = true;
-  boardGroup.add(slab);
+  // 按尺寸重建棋盘底座(外框 4 墙 + 绒布底板 + size² 个格子)。
+  // 外框绝不能用实心盒子:实心盒子的顶面会与棋盘面板完全共面,导致整盘 z-fighting 频闪。
+  let cells = [];
+  let cellGeo = null;
 
-  // 64 个格子:双绿交替成网格,每格独立材质以便单独高亮。
-  const cells = [];
-  const cellGeo = new THREE.PlaneGeometry(0.92, 0.92);
-  for (let r = 0; r < SIZE; r++) {
-    for (let c = 0; c < SIZE; c++) {
-      const m = new THREE.Mesh(
-        cellGeo,
-        new THREE.MeshStandardMaterial({
-          color: (r + c) % 2 ? 0x2f6349 : 0x28553e,
-          roughness: 0.95,
-          emissive: 0x000000,
-        })
-      );
-      m.rotation.x = -Math.PI / 2;
-      m.position.set(cellX(c), CELL_Y, cellZ(r));
-      m.receiveShadow = true;
-      m.userData = { r, c };
-      boardGroup.add(m);
-      cells.push(m);
+  function buildBase(size) {
+    // 清空旧底座
+    for (const child of [...baseGroup.children]) {
+      baseGroup.remove(child);
+      if (child.material && child.material !== frameMat) child.material.dispose();
+    }
+    if (cellGeo) cellGeo.dispose();
+    cells = [];
+    cellGeo = new THREE.PlaneGeometry(0.92, 0.92);
+
+    // 四块实木墙拼成真正的框
+    const frameOuter = size + 1.4;
+    const wallW = 0.45;
+    const wallH = 0.62;
+    const wallY = 0.01; // 顶面 0.32,高于格面 0.215,形成围边
+    const wallCenter = (frameOuter - wallW) / 2;
+    const wallLong = new THREE.BoxGeometry(frameOuter, wallH, wallW);
+    const wallShort = new THREE.BoxGeometry(wallW, wallH, frameOuter - 2 * wallW);
+    for (const [x, z, geo] of [
+      [0, wallCenter, wallLong],
+      [0, -wallCenter, wallLong],
+      [wallCenter, 0, wallShort],
+      [-wallCenter, 0, wallShort],
+    ]) {
+      const wall = new THREE.Mesh(geo, frameMat);
+      wall.position.set(x, wallY, z);
+      wall.castShadow = true;
+      wall.receiveShadow = true;
+      baseGroup.add(wall);
+    }
+
+    // 绒布底板:下沉 0.145,格子像浮雕一样浮在底板上
+    const slab = new THREE.Mesh(
+      new RoundedBoxGeometry(size + 0.35, 0.26, size + 0.35, 4, 0.1),
+      new THREE.MeshStandardMaterial({ color: 0x1f4433, roughness: 0.92 })
+    );
+    slab.position.y = -0.06;
+    slab.receiveShadow = true;
+    baseGroup.add(slab);
+
+    // size² 个格子:双绿交替成网格,每格独立材质以便单独高亮。
+    for (let r = 0; r < size; r++) {
+      for (let c = 0; c < size; c++) {
+        const m = new THREE.Mesh(
+          cellGeo,
+          new THREE.MeshStandardMaterial({
+            color: (r + c) % 2 ? 0x2f6349 : 0x28553e,
+            roughness: 0.95,
+            emissive: 0x000000,
+          })
+        );
+        m.rotation.x = -Math.PI / 2;
+        m.position.set(cellX(c), CELL_Y, cellZ(r));
+        m.receiveShadow = true;
+        m.userData = { r, c };
+        baseGroup.add(m);
+        cells.push(m);
+      }
     }
   }
+
+  buildBase(SIZE);
 
   // 棋子几何体:扁圆盘 + 拱顶(车削成形)。
   const pieceGeo = new THREE.LatheGeometry(
@@ -199,14 +220,14 @@ export function buildScene(container) {
   const pieceByCell = new Map();
 
   function ensurePiece(r, c) {
-    const key = r * SIZE + c;
+    const key = r * curSize + c;
     let piece = pieceByCell.get(key);
     if (!piece) {
       const mesh = new THREE.Mesh(pieceGeo, mats[BLACK]);
       mesh.castShadow = true;
       mesh.position.set(cellX(c), PIECE_Y, cellZ(r));
       mesh.visible = false;
-      boardGroup.add(mesh);
+      pieceGroup.add(mesh);
       piece = { mesh, r, c, color: EMPTY };
       pieceByCell.set(key, piece);
       pieces.push(piece);
@@ -224,7 +245,7 @@ export function buildScene(container) {
   ghost.visible = false;
   ghost.castShadow = false;
   ghost.receiveShadow = false;
-  boardGroup.add(ghost);
+  pieceGroup.add(ghost);
 
   // 最后落子标记:悬浮在棋子顶部的琥珀色光晕(原先的环会被棋子盖住)。
   const lastMarker = new THREE.Mesh(
@@ -240,7 +261,7 @@ export function buildScene(container) {
   lastMarker.rotation.x = -Math.PI / 2;
   lastMarker.position.y = CELL_Y + 0.42;
   lastMarker.visible = false;
-  boardGroup.add(lastMarker);
+  pieceGroup.add(lastMarker);
 
   const tweens = new Tweens();
   const burst = new Burst(scene);
@@ -252,7 +273,7 @@ export function buildScene(container) {
   function setLegal(moves) {
     clearLegal();
     for (const [r, c] of moves) {
-      const m = cells[r * SIZE + c];
+      const m = cells[r * curSize + c];
       m.material.emissive.setHex(0x46d98a);
       m.material.emissiveIntensity = 0.5;
       legalSet.add(m);
@@ -315,8 +336,8 @@ export function buildScene(container) {
         if (dr === 0 && dc === 0) continue;
         const rr = r + dr;
         const cc = c + dc;
-        if (rr < 0 || rr >= SIZE || cc < 0 || cc >= SIZE) continue;
-        const piece = pieceByCell.get(rr * SIZE + cc);
+        if (rr < 0 || rr >= curSize || cc < 0 || cc >= curSize) continue;
+        const piece = pieceByCell.get(rr * curSize + cc);
         if (!piece || !piece.mesh.visible) continue;
         const base = piece.mesh.position.y;
         piece.bouncing = true;
@@ -400,11 +421,12 @@ export function buildScene(container) {
   function syncBoard(board) {
     tweens.clear(true);
     clearLegal();
-    for (let r = 0; r < SIZE; r++) {
-      for (let c = 0; c < SIZE; c++) {
+    const n = board.length;
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) {
         const v = board[r][c];
         if (v === EMPTY) {
-          const existing = pieceByCell.get(r * SIZE + c);
+          const existing = pieceByCell.get(r * curSize + c);
           if (existing) existing.mesh.visible = false;
           continue;
         }
@@ -416,6 +438,35 @@ export function buildScene(container) {
         setPieceColor(piece, v);
       }
     }
+  }
+
+  // 清空全部棋子(棋盘尺寸变化时用)。
+  function clearPieces() {
+    for (const piece of pieces) {
+      pieceGroup.remove(piece.mesh);
+    }
+    pieces.length = 0;
+    pieceByCell.clear();
+  }
+
+  // 无尽模式:随关卡重建棋盘并适配相机与阴影范围。
+  function resizeBoard(size) {
+    curSize = size;
+    buildBase(size);
+    clearPieces();
+    clearLegal();
+    clearLastMove();
+    const k = size / 12;
+    camera.position.set(0, 9.2 * k, 11.2 * k);
+    controls.minDistance = 10 * k;
+    controls.maxDistance = 24 * k;
+    camera.updateProjectionMatrix();
+    const half = size / 2 + 3;
+    sun.shadow.camera.left = -half;
+    sun.shadow.camera.right = half;
+    sun.shadow.camera.top = half;
+    sun.shadow.camera.bottom = -half;
+    sun.shadow.camera.updateProjectionMatrix();
   }
 
   function cellFromPointer(event) {
@@ -509,9 +560,10 @@ export function buildScene(container) {
     clearLastMove,
     syncBoard,
     cellFromPointer,
-    pieceAt: (r, c) => pieceByCell.get(r * SIZE + c) || null,
+    pieceAt: (r, c) => pieceByCell.get(r * curSize + c) || null,
     shake: (strength) => shakeBoard(boardGroup, tweens, strength),
     punch,
+    resizeBoard,
     update,
     resize,
   };

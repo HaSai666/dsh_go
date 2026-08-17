@@ -1,7 +1,7 @@
 // 黑白棋(Reversi)纯规则引擎 —— 不依赖 three.js,可独立测试。
 // 棋盘:SIZE×SIZE 二维数组,行 0 在上,值 EMPTY/BLACK/WHITE。
 
-export const SIZE = 12;
+export const SIZE = 12; // 基础棋盘尺寸(无尽模式随关卡增长,最高 18)
 export const EMPTY = 0;
 export const BLACK = 1;
 export const WHITE = 2;
@@ -20,17 +20,17 @@ export function playerName(p) {
   return p === BLACK ? '黑棋' : '白棋';
 }
 
-export function inBounds(r, c) {
-  return r >= 0 && r < SIZE && c >= 0 && c < SIZE;
+export function inBounds(r, c, n) {
+  return r >= 0 && r < n && c >= 0 && c < n;
 }
 
-export function createBoard() {
-  return Array.from({ length: SIZE }, () => Array(SIZE).fill(EMPTY));
+export function createBoard(size = SIZE) {
+  return Array.from({ length: size }, () => Array(size).fill(EMPTY));
 }
 
-export function initialBoard() {
-  const b = createBoard();
-  const m = (SIZE >> 1) - 1;
+export function initialBoard(size = SIZE) {
+  const b = createBoard(size);
+  const m = (size >> 1) - 1;
   b[m][m] = WHITE;
   b[m + 1][m + 1] = WHITE;
   b[m][m + 1] = BLACK;
@@ -41,9 +41,9 @@ export function initialBoard() {
 // 多样化开局阵型(黑白数量对称,公平但有差异)。
 export const BOARD_PATTERNS = ['classic', 'cross', 'diagonal', 'twin'];
 
-export function spawnBoard(variant = 'classic') {
-  const b = createBoard();
-  const m = (SIZE >> 1) - 1;
+export function spawnBoard(variant = 'classic', size = SIZE) {
+  const b = createBoard(size);
+  const m = (size >> 1) - 1;
   const put = (cells, v) => {
     for (const [r, c] of cells) b[r][c] = v;
   };
@@ -69,19 +69,20 @@ export function cloneBoard(board) {
 
 // 在 (r,c) 落 player 的棋子会翻掉哪些子;非法落点返回空数组。
 export function flipsFor(board, r, c, player) {
-  if (!inBounds(r, c) || board[r][c] !== EMPTY) return [];
+  const n = board.length;
+  if (!inBounds(r, c, n) || board[r][c] !== EMPTY) return [];
   const opp = opponent(player);
   const flipped = [];
   for (const [dr, dc] of DIRS) {
     const line = [];
     let rr = r + dr;
     let cc = c + dc;
-    while (inBounds(rr, cc) && board[rr][cc] === opp) {
+    while (inBounds(rr, cc, n) && board[rr][cc] === opp) {
       line.push([rr, cc]);
       rr += dr;
       cc += dc;
     }
-    if (line.length > 0 && inBounds(rr, cc) && board[rr][cc] === player) {
+    if (line.length > 0 && inBounds(rr, cc, n) && board[rr][cc] === player) {
       flipped.push(...line);
     }
   }
@@ -89,9 +90,10 @@ export function flipsFor(board, r, c, player) {
 }
 
 export function legalMoves(board, player) {
+  const n = board.length;
   const moves = [];
-  for (let r = 0; r < SIZE; r++) {
-    for (let c = 0; c < SIZE; c++) {
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
       if (board[r][c] === EMPTY && flipsFor(board, r, c, player).length > 0) {
         moves.push([r, c]);
       }
@@ -146,12 +148,13 @@ export const CARD_META = Object.fromEntries(CARD_POOL.map((c) => [c.id, c]));
 // 遗物:肉鸽闯关中整局生效的被动。
 export const RELIC_POOL = [
   { id: 'crown', name: '王冠', emoji: '👑', desc: '终局计分:你的角子每个额外 +2' },
-  { id: 'hat', name: '手牌大师', emoji: '🎩', desc: '每关开始多抽 2 张牌' },
+  { id: 'hat', name: '手牌大师', emoji: '🎩', desc: '手牌上限 +1' },
   { id: 'magnet', name: '磁石', emoji: '🧲', desc: '每次落子额外翻 1 枚相邻敌子' },
+  { id: 'clover', name: '幸运草', emoji: '🍀', desc: '每回合补牌时 30% 概率额外多补 1 张' },
 ];
 export const RELIC_META = Object.fromEntries(RELIC_POOL.map((r) => [r.id, r]));
 
-export const HAND_MAX = 6;
+export const HAND_MAX = 12;
 
 export function drawCard(hand, max = HAND_MAX) {
   if (hand.length >= max) return null;
@@ -162,15 +165,17 @@ export function drawCard(hand, max = HAND_MAX) {
 
 // 角子计数(王冠遗物用)。
 export function cornerBonus(board, player) {
-  let n = 0;
-  for (const [r, c] of [[0, 0], [0, SIZE - 1], [SIZE - 1, 0], [SIZE - 1, SIZE - 1]]) {
-    if (board[r][c] === player) n++;
+  const n = board.length;
+  let cnt = 0;
+  for (const [r, c] of [[0, 0], [0, n - 1], [n - 1, 0], [n - 1, n - 1]]) {
+    if (board[r][c] === player) cnt++;
   }
-  return n;
+  return cnt;
 }
 
 // 💥 爆裂:落点 8 邻域中的对手棋子全翻。
 export function cardBlast(board, r, c, player) {
+  const n = board.length;
   const opp = opponent(player);
   const out = [];
   for (let dr = -1; dr <= 1; dr++) {
@@ -178,18 +183,19 @@ export function cardBlast(board, r, c, player) {
       if (!dr && !dc) continue;
       const rr = r + dr;
       const cc = c + dc;
-      if (inBounds(rr, cc) && board[rr][cc] === opp) out.push([rr, cc]);
+      if (inBounds(rr, cc, n) && board[rr][cc] === opp) out.push([rr, cc]);
     }
   }
   return out;
 }
 
-// 🎲 天佑:随机 n 枚对手棋子翻成己方。
-export function cardLucky(board, player, n = 2) {
+// 🎲 天佑:随机 k 枚对手棋子翻成己方。
+export function cardLucky(board, player, k = 2) {
+  const n = board.length;
   const opp = opponent(player);
   const cells = [];
-  for (let r = 0; r < SIZE; r++) {
-    for (let c = 0; c < SIZE; c++) {
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
       if (board[r][c] === opp) cells.push([r, c]);
     }
   }
@@ -197,14 +203,15 @@ export function cardLucky(board, player, n = 2) {
     const j = Math.floor(Math.random() * (i + 1));
     [cells[i], cells[j]] = [cells[j], cells[i]];
   }
-  return cells.slice(0, n);
+  return cells.slice(0, k);
 }
 
 // 🌱 播种:随机一个与己方棋子 8 邻接的空格,无则返回 null。
 export function cardSeed(board, player) {
+  const n = board.length;
   const cells = [];
-  for (let r = 0; r < SIZE; r++) {
-    for (let c = 0; c < SIZE; c++) {
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
       if (board[r][c] !== EMPTY) continue;
       let adj = false;
       for (let dr = -1; dr <= 1 && !adj; dr++) {
@@ -212,7 +219,7 @@ export function cardSeed(board, player) {
           if (!dr && !dc) continue;
           const rr = r + dr;
           const cc = c + dc;
-          if (inBounds(rr, cc) && board[rr][cc] === player) {
+          if (inBounds(rr, cc, n) && board[rr][cc] === player) {
             adj = true;
             break;
           }
@@ -224,12 +231,13 @@ export function cardSeed(board, player) {
   return cells.length ? cells[Math.floor(Math.random() * cells.length)] : null;
 }
 
-// 💣 爆破:随机 n 枚对手棋子被炸飞(变为空格)。
-export function cardBomb(board, player, n = 2) {
+// 💣 爆破:随机 k 枚对手棋子被炸飞(变为空格)。
+export function cardBomb(board, player, k = 2) {
+  const n = board.length;
   const opp = opponent(player);
   const cells = [];
-  for (let r = 0; r < SIZE; r++) {
-    for (let c = 0; c < SIZE; c++) {
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
       if (board[r][c] === opp) cells.push([r, c]);
     }
   }
@@ -237,32 +245,33 @@ export function cardBomb(board, player, n = 2) {
     const j = Math.floor(Math.random() * (i + 1));
     [cells[i], cells[j]] = [cells[j], cells[i]];
   }
-  return cells.slice(0, n);
+  return cells.slice(0, k);
 }
 
-// 🧨 连锁:随机 n 枚与己方棋子 8 邻接的对手棋子。
-export function cardChain(board, player, n = 3) {
+// 🧨 连锁:随机 k 枚与己方棋子 8 邻接的对手棋子。
+export function cardChain(board, player, k = 3) {
+  const n = board.length;
   const opp = opponent(player);
   const cells = new Set();
-  for (let r = 0; r < SIZE; r++) {
-    for (let c = 0; c < SIZE; c++) {
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
       if (board[r][c] !== opp) continue;
       for (let dr = -1; dr <= 1; dr++) {
         for (let dc = -1; dc <= 1; dc++) {
           if (!dr && !dc) continue;
           const rr = r + dr;
           const cc = c + dc;
-          if (inBounds(rr, cc) && board[rr][cc] === player) {
+          if (inBounds(rr, cc, n) && board[rr][cc] === player) {
             cells.add(`${r},${c}`);
           }
         }
       }
     }
   }
-  const list = [...cells].map((k) => k.split(',').map(Number));
+  const list = [...cells].map((s) => s.split(',').map(Number));
   for (let i = list.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [list[i], list[j]] = [list[j], list[i]];
   }
-  return list.slice(0, n);
+  return list.slice(0, k);
 }

@@ -148,14 +148,16 @@ export class UI {
     this.els.diff.style.display = on ? 'none' : '';
   }
 
-  setRunInfo(level, relics, enemyText = '') {
+  setRunInfo(level, size, relics, handCap, enemyText = '') {
     if (!this.runMode) {
       this.els.runbar.classList.add('hidden');
       return;
     }
     this.els.runbar.classList.remove('hidden');
     const relicsText = relics.map((r) => RELIC_META[r].emoji).join(' ');
-    this.els.runbar.textContent = `无尽 · 第 ${level} 关${relicsText ? ' ' + relicsText : ''}${enemyText ? ' · ' + enemyText : ''}`;
+    this.els.runbar.textContent =
+      `无尽 · 第 ${level} 关 · ${size}×${size} · 🀄×${handCap}` +
+      `${relicsText ? ' ' + relicsText : ''}${enemyText ? ' · ' + enemyText : ''}`;
   }
 
   renderHand(hand, selectable) {
@@ -240,11 +242,17 @@ export class UI {
     this.els.rewardScore.textContent = score;
     this.els.rewardOptions.innerHTML = '';
     for (const opt of options) {
-      const meta = opt.kind === 'relic' ? RELIC_META[opt.id] : CARD_META[opt.id];
+      let meta;
+      if (opt.kind === 'handcap') {
+        meta = { emoji: '🀄', name: '手牌上限', desc: '永久 +1:每回合补满手牌的上限' };
+      } else {
+        meta = opt.kind === 'relic' ? RELIC_META[opt.id] : CARD_META[opt.id];
+      }
+      const kindText = opt.kind === 'relic' ? '遗物' : opt.kind === 'handcap' ? '成长' : '卡牌';
       const btn = document.createElement('button');
       btn.className = 'reward-opt';
       btn.innerHTML = `<span class="reward-emoji">${meta.emoji}</span>
-        <span class="reward-text"><b>${opt.kind === 'relic' ? '遗物 · ' : '卡牌 · '}${meta.name}</b><span>${meta.desc}</span></span>`;
+        <span class="reward-text"><b>${kindText} · ${meta.name}</b><span>${meta.desc}</span></span>`;
       btn.addEventListener('click', () => this._onReward?.(opt));
       btn.addEventListener('mouseenter', (e) => this.showTooltip(e.currentTarget, this.cardTip(meta)));
       btn.addEventListener('mouseleave', () => this.hideTooltip());

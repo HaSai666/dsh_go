@@ -46,6 +46,21 @@ for (const variant of BOARD_PATTERNS) {
   );
 }
 
+// 更大棋盘尺寸(无尽模式成长):14/18 尺寸开局与阵型正常
+for (const size of [14, 18]) {
+  const b = initialBoard(size);
+  check(
+    `${size}×${size} 初始局面合法`,
+    b.length === size && legalMoves(b, BLACK).length > 0 && legalMoves(b, WHITE).length > 0
+  );
+  const b2 = spawnBoard('cross', size);
+  const c2 = countDiscs(b2);
+  check(
+    `${size}×${size} 十字阵对称且合法`,
+    b2.length === size && c2.black === c2.white && legalMoves(b2, BLACK).length > 0
+  );
+}
+
 // 走完一整局随机对局,验证不崩溃、终局一致
 let board = initialBoard();
 let player = BLACK;
