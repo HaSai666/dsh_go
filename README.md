@@ -1,5 +1,27 @@
 # 黑白棋 · 3D 解压版
 
+在线试玩:https://hasai666.github.io/dsh_go/
+
+## 部署(GitHub Pages)
+
+```bash
+# 构建站点产物(base 路径为 /dsh_go/)
+$env:DSH_DEPLOY='pages'; npm run build
+
+# 更新 main 分支
+git add -A && git commit -m "update" && git push origin main
+
+# 更新线上站点(gh-pages 分支 = dist 内容)
+git checkout gh-pages
+git rm -rf .; Copy-Item dist\* . -Recurse -Force
+git add -A && git commit -m "deploy" && git push origin gh-pages
+git checkout main
+```
+
+仓库需保持公开(免费计划的私有仓库不支持 GitHub Pages),Settings → Pages → Source 选 `gh-pages` 分支。
+
+---
+
 基于 three.js 的立体黑白棋(Reversi,**12×12 大棋盘,144 格**):每一步棋都有解压级音画反馈——棋子坠落拍击、多米诺式连锁翻面、棋盘震动、五声音阶翻面音效、大翻盘粒子爆裂、终局整盘翻色仪式。
 
 **主页 + 两种模式**:
