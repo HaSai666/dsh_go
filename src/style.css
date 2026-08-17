@@ -1,0 +1,577 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  background: radial-gradient(1200px 800px at 50% 30%, #2a2118 0%, #171310 60%, #0e0b09 100%);
+  color: #efe7d8;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#app {
+  position: fixed;
+  inset: 0;
+}
+
+#app canvas {
+  display: block;
+}
+
+#hud {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* 主页期间隐藏游戏 HUD */
+#hud.inactive > * {
+  display: none;
+}
+
+/* ---------- 主页 ---------- */
+.home {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  transition: opacity 0.4s;
+}
+
+.home.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.home-inner {
+  text-align: center;
+  animation: home-in 0.5s ease-out;
+}
+
+@keyframes home-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.home-title {
+  font-size: 52px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-shadow: 0 4px 30px rgba(0, 0, 0, 0.6);
+}
+
+.home-sub {
+  font-size: 20px;
+  opacity: 0.55;
+  font-weight: 400;
+  margin-left: 6px;
+}
+
+.home-tagline {
+  margin: 12px 0 34px;
+  font-size: 15px;
+  opacity: 0.6;
+  letter-spacing: 0.12em;
+}
+
+.mode-cards {
+  display: flex;
+  gap: 22px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.mode-card {
+  width: 250px;
+  padding: 28px 22px;
+  font: inherit;
+  color: inherit;
+  text-align: center;
+  background: rgba(22, 16, 10, 0.72);
+  border: 1px solid rgba(255, 235, 200, 0.16);
+  border-radius: 18px;
+  cursor: pointer;
+  transition: transform 0.18s, border-color 0.18s, background 0.18s, box-shadow 0.18s;
+  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.4);
+}
+
+.mode-card:hover {
+  transform: translateY(-6px);
+  border-color: rgba(216, 162, 74, 0.65);
+  background: rgba(30, 21, 13, 0.85);
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.55);
+}
+
+.mode-card:active {
+  transform: translateY(-2px) scale(0.98);
+}
+
+.mode-emoji {
+  font-size: 44px;
+  margin-bottom: 12px;
+}
+
+.mode-name {
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  color: #241a0c;
+  background: linear-gradient(135deg, #ffd27a, #ff9d5c);
+  border-radius: 999px;
+  padding: 2px 8px;
+  margin-left: 6px;
+  vertical-align: 2px;
+}
+
+.mode-desc {
+  font-size: 13px;
+  opacity: 0.62;
+  line-height: 1.6;
+}
+
+.home-tip {
+  margin-top: 30px;
+  font-size: 12.5px;
+  opacity: 0.4;
+  letter-spacing: 0.03em;
+}
+
+.panel {
+  position: absolute;
+  background: rgba(20, 15, 10, 0.78);
+  border: 1px solid rgba(255, 235, 200, 0.12);
+  border-radius: 14px;
+  padding: 10px 16px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+}
+
+.top-left {
+  top: 18px;
+  left: 20px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  font-size: 18px;
+}
+
+.top-left .sub {
+  margin-left: 8px;
+  font-size: 12px;
+  opacity: 0.55;
+  font-weight: 400;
+}
+
+.scoreboard {
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.score {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 20px;
+  font-weight: 700;
+  min-width: 64px;
+}
+
+.score.black {
+  justify-content: flex-end;
+}
+
+.disc {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: inline-block;
+  box-shadow: inset -3px -4px 6px rgba(0, 0, 0, 0.45), inset 2px 3px 4px rgba(255, 255, 255, 0.25);
+}
+
+.disc.black {
+  background: radial-gradient(circle at 35% 30%, #4a4a55, #101014 70%);
+}
+
+.disc.white {
+  background: radial-gradient(circle at 35% 30%, #ffffff, #cfc8b4 75%);
+}
+
+.turnbox {
+  font-size: 13px;
+  opacity: 0.85;
+  min-width: 110px;
+  text-align: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.controls {
+  top: 18px;
+  right: 20px;
+  display: flex;
+  gap: 8px;
+  pointer-events: auto;
+  align-items: center;
+}
+
+.controls select,
+.controls button,
+.btn-primary {
+  font: inherit;
+  color: inherit;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 235, 200, 0.18);
+  border-radius: 10px;
+  padding: 7px 12px;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.05s;
+}
+
+.controls select option {
+  background: #221a12;
+  color: #efe7d8;
+}
+
+.controls button:hover,
+.btn-primary:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.controls button:active,
+.btn-primary:active {
+  transform: scale(0.96);
+}
+
+.controls button:disabled,
+.controls select:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: #d8a24a;
+  color: #241a0c;
+  font-weight: 700;
+  border-color: transparent;
+  padding: 10px 26px;
+  font-size: 16px;
+}
+
+.btn-primary:hover {
+  background: #e6b35c;
+}
+
+.toast {
+  position: absolute;
+  left: 50%;
+  bottom: 84px;
+  transform: translateX(-50%) translateY(10px);
+  background: rgba(20, 15, 10, 0.7);
+  border: 1px solid rgba(255, 235, 200, 0.15);
+  padding: 10px 22px;
+  border-radius: 999px;
+  font-size: 15px;
+  opacity: 0;
+  transition: opacity 0.25s, transform 0.25s;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* ---------- 卡牌栏 ---------- */
+.cardbar {
+  position: absolute;
+  bottom: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  pointer-events: auto;
+}
+
+.cardbar.hidden {
+  display: none;
+}
+
+.cardbar-label {
+  font-size: 12.5px;
+  opacity: 0.75;
+  margin-bottom: 8px;
+  letter-spacing: 0.03em;
+}
+
+.cardbar-cards {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+.card {
+  font: inherit;
+  color: inherit;
+  width: 92px;
+  padding: 8px 6px 10px;
+  background: rgba(22, 16, 10, 0.78);
+  border: 1px solid rgba(255, 235, 200, 0.2);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s, background 0.15s;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+
+.card:hover:not(.disabled) {
+  transform: translateY(-4px);
+  border-color: rgba(255, 235, 200, 0.45);
+}
+
+.card.selected {
+  border-color: #d8a24a;
+  background: rgba(58, 40, 20, 0.9);
+  box-shadow: 0 0 0 2px rgba(216, 162, 74, 0.65), 0 8px 22px rgba(0, 0, 0, 0.45);
+  transform: translateY(-6px);
+}
+
+.card.disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.card-emoji {
+  display: block;
+  font-size: 26px;
+  line-height: 1.3;
+}
+
+.card-name {
+  display: block;
+  font-size: 12px;
+  opacity: 0.85;
+  margin-top: 2px;
+}
+
+.card-order {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 22px;
+  height: 22px;
+  line-height: 22px;
+  border-radius: 50%;
+  background: #d8a24a;
+  color: #241a0c;
+  font-size: 12px;
+  font-weight: 800;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+}
+
+.card {
+  position: relative;
+}
+
+/* ---------- 悬浮介绍 ---------- */
+.tooltip {
+  position: fixed;
+  z-index: 60;
+  max-width: 220px;
+  padding: 10px 14px;
+  background: rgba(14, 10, 6, 0.95);
+  border: 1px solid rgba(255, 235, 200, 0.25);
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.6;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+}
+
+.tooltip.hidden {
+  display: none;
+}
+
+/* ---------- 肉鸽关卡栏 ---------- */
+.runbar {
+  margin-top: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  opacity: 0.9;
+  letter-spacing: 0.04em;
+}
+
+.runbar.hidden {
+  display: none;
+}
+
+/* ---------- 战利品三选一 ---------- */
+.reward-options {
+  display: flex;
+  gap: 14px;
+  justify-content: center;
+  margin: 6px 0 18px;
+  flex-wrap: wrap;
+}
+
+.reward-opt {
+  font: inherit;
+  color: inherit;
+  width: 168px;
+  padding: 16px 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 235, 200, 0.2);
+  border-radius: 14px;
+  cursor: pointer;
+  text-align: center;
+  transition: transform 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.reward-opt:hover {
+  transform: translateY(-4px);
+  border-color: rgba(216, 162, 74, 0.7);
+  background: rgba(255, 255, 255, 0.11);
+}
+
+.reward-emoji {
+  display: block;
+  font-size: 34px;
+  margin-bottom: 8px;
+}
+
+.reward-text b {
+  display: block;
+  font-size: 15px;
+  margin-bottom: 4px;
+}
+
+.reward-text span {
+  font-size: 12px;
+  opacity: 0.6;
+  line-height: 1.5;
+  display: block;
+}
+
+.hint {
+  position: absolute;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 12.5px;
+  opacity: 0.5;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 7, 5, 0.62);
+  opacity: 1;
+  transition: opacity 0.35s;
+  pointer-events: auto;
+}
+
+.overlay.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.overlay-card {
+  text-align: center;
+  background: rgba(24, 17, 11, 0.85);
+  border: 1px solid rgba(255, 235, 200, 0.15);
+  border-radius: 20px;
+  padding: 40px 56px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  transition: transform 0.3s;
+}
+
+.overlay.hidden .overlay-card {
+  transform: scale(0.92);
+}
+
+.over-title {
+  font-size: 30px;
+  font-weight: 800;
+  margin-bottom: 10px;
+}
+
+.over-score {
+  font-size: 22px;
+  opacity: 0.9;
+  margin-bottom: 8px;
+}
+
+.over-sub {
+  font-size: 14px;
+  opacity: 0.6;
+  margin-bottom: 26px;
+}
+
+.thinking-dots::after {
+  content: "";
+  display: inline-block;
+  width: 1.2em;
+  text-align: left;
+  animation: dots 1.2s steps(4) infinite;
+}
+
+@keyframes dots {
+  0% {
+    content: "";
+  }
+  25% {
+    content: ".";
+  }
+  50% {
+    content: "..";
+  }
+  75% {
+    content: "...";
+  }
+}
+
+@media (max-width: 760px) {
+  .top-left {
+    display: none;
+  }
+  .scoreboard {
+    top: 12px;
+  }
+  .controls {
+    top: auto;
+    bottom: 56px;
+    right: 12px;
+  }
+  .hint {
+    display: none;
+  }
+}
