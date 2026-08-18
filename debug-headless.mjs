@@ -524,8 +524,8 @@ const l3 = await page.evaluate(() => {
   }
   return { level: g.run.level, aiHand: g.hands[2].length, white, size: g.board.length };
 });
-// 第 3 关:敌方手牌上限 4+2=6;白子 = 阵型白子(2 或 4) + 特权 2;棋盘 14×14
-const l3Ok = l3.level === 3 && l3.aiHand === 6 && (l3.white === 4 || l3.white === 6) && l3.size === 14;
+// 第 3 关:敌方手牌上限 4+2=6;白子 = 富开局 12 + 特权 2 = 14;棋盘 14×14
+const l3Ok = l3.level === 3 && l3.aiHand === 6 && l3.white === 14 && l3.size === 14;
 console.log(`→ 第 3 关特权校验: level=${l3.level} aiHand=${l3.aiHand} white=${l3.white} size=${l3.size}`);
 if (!l3Ok) {
   console.log('❌ 第 3 关敌方特权异常');
@@ -575,8 +575,8 @@ const l4 = await page.evaluate(() => {
   }
   return { level: g.run.level, aiHand: g.hands[2].length, white, size: g.board.length };
 });
-// 第 4 关:敌方手牌上限 4+2=6;白子 = 阵型白子(2 或 4) + 特权 3;棋盘 15×15
-const l4Ok = l4.level === 4 && l4.aiHand === 6 && (l4.white === 5 || l4.white === 7) && l4.size === 15;
+// 第 4 关:敌方手牌上限 4+2=6;白子 = 12 + 特权 3 = 15;棋盘 15×15
+const l4Ok = l4.level === 4 && l4.aiHand === 6 && l4.white === 15 && l4.size === 15;
 console.log(`→ 第 4 关特权校验: level=${l4.level} aiHand=${l4.aiHand} white=${l4.white} size=${l4.size}`);
 if (!l4Ok) {
   console.log('❌ 第 4 关敌方特权异常');
@@ -621,8 +621,8 @@ const l5 = await page.evaluate(() => {
   }
   return { level: g.run.level, aiHand: g.hands[2].length, white, size: g.board.length };
 });
-// 第 5 关:敌方手牌上限 4+3=7;白子 = 阵型白子(2/4) + 特权 4;棋盘 16×16
-const l5Ok = l5.level === 5 && l5.aiHand === 7 && (l5.white === 6 || l5.white === 8) && l5.size === 16;
+// 第 5 关:敌方手牌上限 4+3=7;白子 = 12 + 特权 4 = 16;棋盘 16×16
+const l5Ok = l5.level === 5 && l5.aiHand === 7 && l5.white === 16 && l5.size === 16;
 console.log(`→ 第 5 关特权校验: level=${l5.level} aiHand=${l5.aiHand} white=${l5.white} size=${l5.size}`);
 if (!l5Ok) {
   console.log('❌ 无尽模式特权递增异常');

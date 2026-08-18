@@ -111,6 +111,29 @@ async function probe(viewport, label) {
   );
   ok(`${label} 触屏落子成功`, touched, `目标(${pt.r},${pt.c})`);
 
+  // 手牌上限拉满(10 张)时全部可见(自动换行,不溢出)
+  await page.evaluate(() => {
+    const g = window.__game;
+    g.run.handCap = 10;
+    g.refill(1);
+    window.__ui.renderHand(g.hands[1], true);
+  });
+  await page.waitForTimeout(400);
+  const manyCards = await page.evaluate(() => {
+    const w = innerWidth;
+    const els = [...document.querySelectorAll('#cardbar-cards .card')];
+    const allVisible = els.every((el) => {
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.left >= -2 && r.right <= w + 2;
+    });
+    return { count: els.length, allVisible };
+  });
+  ok(
+    `${label} 10 张手牌完整显示`,
+    manyCards.count === 10 && manyCards.allVisible,
+    `cards=${manyCards.count} allVisible=${manyCards.allVisible}`
+  );
+
   ok(`${label} 无运行错误`, errs.length === 0, errs.join(' | '));
   await context.close();
 }

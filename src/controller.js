@@ -16,6 +16,7 @@ import {
   opponent,
   spawnBoard,
   BOARD_PATTERNS,
+  RICH_PATTERNS,
   drawCard,
   cardBlast,
   cardLucky,
@@ -278,11 +279,11 @@ export class Game {
   newGame() {
     this.generation++;
     this.trace = [];
-    // 经典模式固定 12×12 经典开局;无尽每关棋盘增大 + 随机开局阵型
+    // 经典模式固定 12×12 经典开局;无尽每关棋盘增大 + 富开局(24 子)随机二选一
     const size = this.mode === 'cards' && this.run ? boardSizeFor(this.run.level) : 12;
     this.board =
       this.mode === 'cards' && this.run
-        ? spawnBoard(BOARD_PATTERNS[Math.floor(Math.random() * BOARD_PATTERNS.length)], size)
+        ? spawnBoard(RICH_PATTERNS[Math.floor(Math.random() * RICH_PATTERNS.length)], size)
         : initialBoard(size);
     this.ctx.resizeBoard(size);
     this.hands = { [BLACK]: [], [WHITE]: [] };

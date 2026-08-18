@@ -40,6 +40,8 @@ export function initialBoard(size = SIZE) {
 
 // 多样化开局阵型(黑白数量对称,公平但有差异)。
 export const BOARD_PATTERNS = ['classic', 'cross', 'diagonal', 'twin'];
+// 肉鸽模式的富开局:24 子(12 黑 + 12 白),从第一手就是中盘强度。
+export const RICH_PATTERNS = ['bloom', 'grid'];
 
 export function spawnBoard(variant = 'classic', size = SIZE) {
   const b = createBoard(size);
@@ -47,7 +49,24 @@ export function spawnBoard(variant = 'classic', size = SIZE) {
   const put = (cells, v) => {
     for (const [r, c] of cells) b[r][c] = v;
   };
-  if (variant === 'cross') {
+  if (variant === 'bloom') {
+    // 绽放:核心 + 三圈花瓣,180° 旋转对称,共 24 子
+    put([[m, m], [m + 1, m + 1]], WHITE);
+    put([[m, m + 1], [m + 1, m]], BLACK);
+    put([[m - 1, m], [m, m - 1], [m + 1, m + 2], [m + 2, m + 1]], WHITE);
+    put([[m - 1, m + 1], [m + 1, m - 1], [m, m + 2], [m + 2, m]], BLACK);
+    put([[m - 1, m - 1], [m + 2, m + 2]], WHITE);
+    put([[m - 1, m + 2], [m + 2, m - 1]], BLACK);
+    put([[m - 2, m], [m, m - 2], [m + 1, m + 3], [m + 3, m + 1]], WHITE);
+    put([[m - 2, m + 1], [m + 1, m - 2], [m, m + 3], [m + 3, m]], BLACK);
+  } else if (variant === 'grid') {
+    // 网格:4×6 棋盘格(12 白 + 12 黑),180° 旋转对称
+    for (let r = m - 1; r <= m + 2; r++) {
+      for (let c = m - 2; c <= m + 3; c++) {
+        b[r][c] = (r + c) % 2 ? BLACK : WHITE;
+      }
+    }
+  } else if (variant === 'cross') {
     put([[m, m], [m + 1, m + 1], [m - 1, m + 1], [m + 2, m]], WHITE);
     put([[m, m + 1], [m + 1, m], [m - 1, m], [m + 2, m + 1]], BLACK);
   } else if (variant === 'diagonal') {

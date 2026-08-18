@@ -342,6 +342,8 @@ select {
   display: flex;
   gap: 10px;
   justify-content: center;
+  flex-wrap: wrap; /* 手牌上限拉高时自动换行,全部可见 */
+  max-width: 94vw;
 }
 
 .card {
@@ -625,33 +627,38 @@ select {
     border-radius: 8px;
   }
   .cardbar {
-    bottom: calc(env(safe-area-inset-bottom, 0px) + 60px);
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 58px);
+    max-width: 96vw;
   }
   .cardbar-label {
     font-size: 11px;
     margin-bottom: 5px;
   }
+  .cardbar-cards {
+    gap: 6px;
+    max-width: 96vw;
+  }
   .card {
-    width: 62px;
-    padding: 5px 3px 7px;
+    width: 52px;
+    padding: 4px 3px 6px;
     border-radius: 9px;
   }
   .card-emoji {
-    font-size: 19px;
+    font-size: 18px;
   }
   .card-name {
     font-size: 10px;
   }
   .card-order {
-    width: 17px;
-    height: 17px;
-    line-height: 17px;
+    width: 16px;
+    height: 16px;
+    line-height: 16px;
     font-size: 10px;
     top: -6px;
     right: -6px;
   }
   .toast {
-    bottom: calc(env(safe-area-inset-bottom, 0px) + 146px);
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 240px);
     font-size: 12px;
     padding: 8px 14px;
     max-width: 88vw;

@@ -13,6 +13,7 @@ import {
   flipsFor,
   spawnBoard,
   BOARD_PATTERNS,
+  RICH_PATTERNS,
 } from './src/game.js';
 import { chooseMove } from './src/ai.js';
 
@@ -36,14 +37,19 @@ const m1 = applyMove(b0, 4, 5, BLACK);
 check('(4,5) 落子合法', m1 !== null);
 check('(4,5) 翻 1 子(5,5)', JSON.stringify(m1.flipped) === '[[5,5]]');
 
-// 多样化开局阵型:四种全部黑白对称且存在合法步
-for (const variant of BOARD_PATTERNS) {
+// 多样化开局阵型:全部黑白对称且存在合法步(含 24 子富开局)
+for (const variant of [...BOARD_PATTERNS, ...RICH_PATTERNS]) {
   const b = spawnBoard(variant);
   const c = countDiscs(b);
   check(
-    `开局阵型 ${variant} 黑白对称且有合法步`,
+    `开局阵型 ${variant} 黑白对称且有合法步(${c.black + c.white} 子)`,
     c.black === c.white && legalMoves(b, BLACK).length > 0 && legalMoves(b, WHITE).length > 0
   );
+}
+// 富开局至少 20 子
+for (const variant of RICH_PATTERNS) {
+  const c = countDiscs(spawnBoard(variant));
+  check(`富开局 ${variant} ≥20 子`, c.black + c.white >= 20);
 }
 
 // 更大棋盘尺寸(无尽模式成长):14/18 尺寸开局与阵型正常
