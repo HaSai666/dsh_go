@@ -3,7 +3,6 @@
 import {
   BLACK,
   EMPTY,
-  SIZE,
   DIRS,
   inBounds,
   countDiscs,
@@ -13,6 +12,7 @@ import {
   opponent,
   cardBlast,
   cardSeed,
+  CARD_META,
 } from './game.js';
 
 // 位置权重表:按棋盘尺寸生成 —— 角 100,边 10,X 位(角旁斜格)-40,次外圈 -8,内部 0。
@@ -38,8 +38,6 @@ function makeWeights(size) {
   }
   return W;
 }
-
-const W = makeWeights(SIZE);
 
 const wCache = { size: 0, w: null };
 
@@ -188,25 +186,85 @@ export function chooseMove(board, player, difficulty, timeMs = 900) {
   return move || bestAtDepth(board, player, 1);
 }
 
-// 卡牌模式:决定本步打出哪些牌(返回 hand 的子集)。
-export function chooseCards(board, hand, player, r, c, difficulty = 'normal') {
+function adjacentChainTargets(board, player) {
+  const n = board.length;
+  const opp = opponent(player);
+  let count = 0;
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
+      if (board[r][c] !== opp) continue;
+      if (
+        DIRS.some(([dr, dc]) => {
+          const rr = r + dr;
+          const cc = c + dc;
+          return inBounds(rr, cc, n) && board[rr][cc] === player;
+        })
+      ) {
+        count++;
+      }
+    }
+  }
+  return count;
+}
+
+// 卡牌模式:在行动力预算内搜索有顺序的卡牌组合;回响会按前一张牌估值。
+export function chooseCards(board, hand, player, r, c, difficulty = 'normal', energy = 3) {
   const opp = opponent(player);
   const counts = countDiscs(board);
   const oppCount = opp === BLACK ? counts.black : counts.white;
   const empty = board.length * board.length - counts.black - counts.white;
   const adj = cardBlast(board, r, c, player).length;
-  const cap = difficulty === 'hard' ? 3 : difficulty === 'normal' ? 2 : 1;
-  const picks = [];
-  for (const id of hand) {
-    if (picks.length >= cap) break;
-    if (id === 'blast' && adj >= 1) picks.push(id);
-    else if (id === 'lucky' && oppCount >= 6) picks.push(id);
-    else if (id === 'chain' && oppCount >= 8) picks.push(id);
-    else if (id === 'seed' && cardSeed(board, player)) picks.push(id);
-    else if (id === 'shield' && (oppCount >= 20 || empty <= 12)) picks.push(id);
-    else if (id === 'bomb' && oppCount >= 16) picks.push(id);
-    else if (id === 'combo' && difficulty === 'hard' && hand.length >= 2 && Math.random() < 0.6) picks.push(id);
-    else if (id === 'echo' && picks.length > 0) picks.push(id); // 回响重复上一张
+  const chainTargets = adjacentChainTargets(board, player);
+  const afterMove = applyMove(board, r, c, player)?.board || board;
+  const nextMobility = legalMoves(afterMove, player).length;
+  const canSeed = Boolean(cardSeed(board, player));
+  const maxCards = difficulty === 'hard' ? 4 : difficulty === 'normal' ? 2 : 1;
+  const threshold = difficulty === 'hard' ? 1.5 : difficulty === 'normal' ? 3.5 : 5.5;
+
+  const utility = (id, previousId, previousValue) => {
+    if (id === 'blast') return adj ? 2 + adj * 2.2 : -4;
+    if (id === 'lucky') return oppCount >= 2 ? Math.min(oppCount, 2) * 2.4 : -3;
+    if (id === 'chain') return chainTargets ? Math.min(chainTargets, 3) * 2.1 : -3;
+    if (id === 'seed') return canSeed ? 2.8 : -3;
+    if (id === 'shield') return empty <= 20 ? 6 : oppCount >= 20 ? 4.5 : 1.2;
+    if (id === 'bomb') return oppCount >= 2 ? Math.min(oppCount, 2) * 2.8 : -3;
+    if (id === 'combo') return nextMobility ? 6.5 + Math.min(nextMobility, 4) * 0.4 : -8;
+    if (id === 'echo') {
+      if (!previousId || ['echo', 'combo', 'shield'].includes(previousId)) return -6;
+      return previousValue * 0.85;
+    }
+    return -6;
+  };
+
+  let best = [];
+  let bestScore = 0;
+  let bestCost = 0;
+
+  function search(sequence, used, cost, score, previousId, previousValue) {
+    if (
+      score > bestScore + 0.001 ||
+      (Math.abs(score - bestScore) < 0.001 && cost < bestCost)
+    ) {
+      best = [...sequence];
+      bestScore = score;
+      bestCost = cost;
+    }
+    if (sequence.length >= maxCards) return;
+    for (let i = 0; i < hand.length; i++) {
+      if (used.has(i)) continue;
+      const id = hand[i];
+      const nextCost = cost + (CARD_META[id]?.cost || 0);
+      if (nextCost > energy) continue;
+      const value = utility(id, previousId, previousValue);
+      if (value <= 0) continue;
+      used.add(i);
+      sequence.push(id);
+      search(sequence, used, nextCost, score + value, id, value);
+      sequence.pop();
+      used.delete(i);
+    }
   }
-  return picks;
+
+  search([], new Set(), 0, 0, null, 0);
+  return bestScore >= threshold ? best : [];
 }

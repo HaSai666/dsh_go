@@ -16,6 +16,16 @@ import {
   RICH_PATTERNS,
 } from './src/game.js';
 import { chooseMove } from './src/ai.js';
+import {
+  MAX_HAND_CAP,
+  boardSizeFor,
+  createRun,
+  grantReward,
+  handCapFor,
+  rewardOptionsFor,
+  runConfigFor,
+  startingHandFor,
+} from './src/run.js';
 
 let fails = 0;
 function check(name, cond, extra = '') {
@@ -104,9 +114,13 @@ for (const d of ['easy', 'normal', 'hard']) {
 
 // ---------- 卡牌模式纯逻辑 ----------
 import {
+  CARD_ENERGY_MAX,
   drawCard,
   HAND_MAX,
   CARD_POOL,
+  cardEnergy,
+  cardEnergyForTurn,
+  comebackActive,
   cardBlast,
   cardLucky,
   cardSeed,
@@ -191,14 +205,81 @@ import { chooseCards } from './src/ai.js';
 // AI 选牌:返回手牌子集且不超过难度上限
 {
   const hand = ['blast', 'combo', 'lucky', 'shield'];
-  const picks = chooseCards(initialBoard(), hand, WHITE, 4, 5, 'normal');
-  check('AI 选牌是手牌子集', picks.every((id) => hand.includes(id)) && picks.length <= 2);
+  const picks = chooseCards(initialBoard(), hand, WHITE, 4, 5, 'normal', 3);
+  check(
+    'AI 选牌是手牌子集且不超行动力',
+    picks.every((id) => hand.includes(id)) && picks.length <= 2 && cardEnergy(picks) <= 3
+  );
+}
+// AI 能识别顺序敏感的低费组合
+{
+  const b = createBoard();
+  b[3][3] = BLACK;
+  b[3][4] = WHITE;
+  b[4][4] = WHITE;
+  b[2][3] = WHITE;
+  const hand = ['echo', 'blast', 'seed'];
+  const picks = chooseCards(b, hand, BLACK, 3, 3, 'hard', 3);
+  check(
+    'hard AI 在预算内安排回响顺序',
+    cardEnergy(picks) <= 3 && (!picks.includes('echo') || picks.indexOf('echo') > 0),
+    JSON.stringify(picks)
+  );
 }
 // 卡牌模式下 AI 正常出招
 const midCard = applyMove(b0, 4, 5, BLACK).board;
 for (const d of ['easy', 'normal', 'hard']) {
   const mv = chooseMove(midCard, WHITE, d);
   check(`${d} AI 卡牌模式给合法步`, mv !== null && flipsFor(midCard, mv[0], mv[1], WHITE).length > 0);
+}
+
+// ---------- 无尽模式成长 ----------
+{
+  const run = createRun();
+  check('无尽模式从 12×12 成长并封顶 18×18', boardSizeFor(1) === 12 && boardSizeFor(7) === 18 && boardSizeFor(99) === 18);
+  check(
+    '敌方成长配置按关卡递增并封顶',
+    runConfigFor(1).handBonus === 0 &&
+      runConfigFor(3).handBonus === 1 &&
+      runConfigFor(99).handBonus === 6 &&
+      runConfigFor(99).extraDiscs === 10 &&
+      runConfigFor(99).budget === 2000
+  );
+
+  check('手牌大师奖励可领取', grantReward(run, { kind: 'relic', id: 'hat' }));
+  check('手牌大师只增加 1 手牌上限', run.handCap === 5 && handCapFor(run, BLACK) === 5);
+  check('重复遗物不会再次生效', !grantReward(run, { kind: 'relic', id: 'hat' }) && run.handCap === 5);
+
+  check('奖励卡加入后续关卡起始手牌', grantReward(run, { kind: 'card', id: 'blast' }) && startingHandFor(run).includes('blast'));
+  run.bonus.push('combo', 'lucky', 'seed', 'shield', 'bomb');
+  const opening = startingHandFor(run);
+  check('起始奖励卡不突破手牌上限', opening.length === handCapFor(run, BLACK) && opening.at(-1) === 'bomb');
+
+  run.relics = ['crown', 'hat', 'magnet', 'clover'];
+  run.handCap = MAX_HAND_CAP;
+  const opts = rewardOptionsFor(run, () => 0);
+  const keys = opts.map((opt) => `${opt.kind}:${opt.id || ''}`);
+  check('满成长时仍提供 3 个有效战利品', opts.length === 3 && opts.every((opt) => opt.kind === 'card'));
+  check('同屏战利品不重复', new Set(keys).size === keys.length);
+}
+
+// ---------- 卡牌行动力与反雪球 ----------
+{
+  check('卡牌费用可组合计算', cardEnergy(['blast', 'echo']) === 3 && cardEnergy(['combo']) === 3);
+  check(
+    '首回合先手 1 点/后手 2 点行动力',
+    cardEnergyForTurn(initialBoard(), BLACK, 0, BLACK) === 1 &&
+      cardEnergyForTurn(initialBoard(), WHITE, 0, BLACK) === 2
+  );
+  check('常规回合为 3 点行动力', cardEnergyForTurn(initialBoard(), BLACK, 1, BLACK) === CARD_ENERGY_MAX);
+
+  const trailing = createBoard();
+  for (let c = 0; c < 14; c++) trailing[Math.floor(c / 12)][c % 12] = WHITE;
+  trailing[5][5] = BLACK;
+  check(
+    '落后达到阈值时触发逆风行动力',
+    comebackActive(trailing, BLACK) && cardEnergyForTurn(trailing, BLACK, 1, BLACK) === CARD_ENERGY_MAX + 1
+  );
 }
 
 console.log(fails === 0 ? '\n全部通过 ✅' : `\n${fails} 项失败 ❌`);

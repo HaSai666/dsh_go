@@ -1,6 +1,6 @@
 // 移动端冒烟:竖屏/横屏下主页可见、进入无尽模式、触屏点击落子成功、棋盘完整可见。
 // 用法: node mobile-smoke.mjs   (URL 环境变量可指向线上站点)
-import { chromium } from 'file:///D:/wk_github/dsh_test/othello3d/node_modules/playwright-core/index.mjs';
+import { chromium } from 'playwright-core';
 
 const URL = process.env.URL || 'http://localhost:5173/';
 const UA =
@@ -114,8 +114,13 @@ async function probe(viewport, label) {
   // 手牌上限拉满(10 张)时全部可见(自动换行,不溢出)
   await page.evaluate(() => {
     const g = window.__game;
+    g.generation++;
+    g.phase = 'idle';
+    g.turn = 1;
     g.run.handCap = 10;
-    g.refill(1);
+    g.hands[1] = [];
+    g.refill(1, true);
+    window.__ui.setCardEnergy(4, '逆风 +1');
     window.__ui.renderHand(g.hands[1], true);
   });
   await page.waitForTimeout(400);

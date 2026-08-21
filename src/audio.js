@@ -83,9 +83,16 @@ export class AudioFX {
   }
 
   // 落子:低沉"啪" + 短促击打噪声。
-  place() {
-    this._blip({ type: 'sine', f0: 180, f1: 55, dur: 0.16, gain: 0.5 });
-    this._noiseBurst({ dur: 0.05, gain: 0.3, freq: 2400, q: 1.4 });
+  place(flips = 0) {
+    const power = Math.min(Math.max(flips, 0), 10);
+    this._blip({
+      type: 'sine',
+      f0: Math.max(125, 190 - power * 6),
+      f1: 48,
+      dur: 0.16 + power * 0.006,
+      gain: 0.42 + power * 0.015,
+    });
+    this._noiseBurst({ dur: 0.05, gain: 0.24 + power * 0.01, freq: 2400, q: 1.4 });
   }
 
   // 翻面:五声音阶逐级升高,连锁越多音调越高。
@@ -101,6 +108,19 @@ export class AudioFX {
   boom() {
     this._blip({ type: 'sine', f0: 90, f1: 30, dur: 0.5, gain: 0.55 });
     this._noiseBurst({ dur: 0.35, gain: 0.3, freq: 900, f1: 120, type: 'lowpass' });
+  }
+
+  moveResult({ flips = 0, cards = 0, corner = false, extraTurn = false } = {}) {
+    let notes = [];
+    if (corner) notes = [659.25, 987.77, 1318.51];
+    else if (flips >= 10) notes = [392, 587.33, 783.99, 1174.66];
+    else if (flips >= 6) notes = [523.25, 659.25, 987.77];
+    else if (flips >= 3) notes = [523.25, 783.99];
+    else if (cards >= 2) notes = [440, 659.25];
+    if (extraTurn) notes.push(1046.5);
+    notes.forEach((f, i) => {
+      this._blip({ type: 'triangle', f0: f, dur: 0.18, gain: 0.13, when: i * 0.055 });
+    });
   }
 
   pass() {
@@ -142,6 +162,8 @@ export class AudioFX {
       seed: [523.25, 659.25, 783.99],
       shield: [440, 554.37],
       bomb: [311.13, 233.08, 175],
+      echo: [783.99, 523.25, 783.99],
+      chain: [392, 523.25, 659.25, 783.99],
     }[type] || [523.25];
     seq.forEach((f, i) => {
       this._blip({ type: 'triangle', f0: f, dur: 0.16, gain: 0.22, when: i * 0.08 });

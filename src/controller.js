@@ -1,10 +1,9 @@
 // 对局流程:落子→拍击→连锁翻面→结算卡牌→换手→AI→终局仪式。
-// 支持经典模式与卡牌模式(每步可打出任意张手牌)。
+// 支持经典模式与卡牌模式(按行动力预算组合手牌)。
 import {
   BLACK,
   WHITE,
   EMPTY,
-  SIZE,
   initialBoard,
   createBoard,
   cloneBoard,
@@ -14,8 +13,8 @@ import {
   countDiscs,
   playerName,
   opponent,
+  cellName,
   spawnBoard,
-  BOARD_PATTERNS,
   RICH_PATTERNS,
   drawCard,
   cardBlast,
@@ -24,45 +23,34 @@ import {
   cardBomb,
   cardChain,
   cornerBonus,
-  CARD_POOL,
+  cardEnergy,
+  cardEnergyForTurn,
+  comebackActive,
+  TURN_CARD_DRAW,
   CARD_META,
-  RELIC_POOL,
   RELIC_META,
 } from './game.js';
 import { chooseMove, chooseCards } from './ai.js';
+import {
+  boardSizeFor,
+  createRun,
+  extraSpotsFor,
+  grantReward,
+  handCapFor,
+  rewardOptionsFor,
+  runConfigFor,
+  startingHandFor,
+} from './run.js';
 
 // QA 慢动作因子:无头调试时把流程延迟拉长,便于定点抓拍(生产恒为 1)。
 const delay = (ms) =>
-  new Promise((r) => setTimeout(r, ms * (window.__QA_SLOWMO || 1)));
-
-// 无尽模式:敌方特权按关卡公式无限递增;棋盘随关卡增大。
-function runCfgFor(level) {
-  const l = Math.max(1, level);
-  return {
-    diff: 'hard',
-    handBonus: Math.min(Math.ceil(l / 2), 6), // 1,1,2,2,3,3...封顶 6(敌方手牌上限 4+6=10)
-    magnet: l >= 2,
-    extraDiscs: l >= 3 ? Math.min(2 + (l - 3), 10) : 0, // 2,3,4...封顶 10
-    budget: Math.min(600 + (l - 1) * 200, 2000), // 600,800,1000...封顶 2000ms
-  };
-}
-
-// 棋盘尺寸:12×12 起步,每关 +1,封顶 18×18。
-function boardSizeFor(level) {
-  return Math.min(12 + Math.max(0, level - 1), 18);
-}
-
-// 敌方开局加子位置:四边中段交错(避开开局阵型与角)。
-function extraSpotsFor(size) {
-  const spots = [];
-  for (let d = 2; d < size - 2 && spots.length < 16; d += 2) {
-    spots.push([0, d]);
-    spots.push([d, 0]);
-    spots.push([size - 1, size - 1 - d]);
-    spots.push([size - 1 - d, size - 1]);
-  }
-  return spots;
-}
+  new Promise((r) =>
+    setTimeout(
+      r,
+      (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 0 : ms) *
+        (window.__QA_SLOWMO || 1)
+    )
+  );
 
 export class Game {
   constructor(ctx, ui, audio) {
@@ -82,8 +70,16 @@ export class Game {
     this.difficulty = 'normal';
     this.trace = []; // 调试轨迹:关键事件时间线,供无头 QA 定点抓拍
     this.run = null; // 无尽闯关状态: { level, relics, bonus, handCap }
+    this.keyboardMoveIndex = 0;
+    this.startingPlayer = BLACK;
+    this.movesPlayed = { [BLACK]: 0, [WHITE]: 0 };
+    this.currentCardEnergy = 0;
 
     const dom = ctx.renderer.domElement;
+    dom.tabIndex = 0;
+    dom.setAttribute('role', 'application');
+    dom.setAttribute('aria-label', '3D 黑白棋棋盘');
+    dom.setAttribute('aria-describedby', 'game-instructions');
     let downX = 0;
     let downY = 0;
     dom.addEventListener('pointerdown', (e) => {
@@ -98,11 +94,28 @@ export class Game {
     });
     dom.addEventListener('pointermove', (e) => this.handleMove(e));
     dom.addEventListener('pointerleave', () => this.ctx.hover(null, null));
+    dom.addEventListener('focus', () => {
+      if (dom.matches(':focus-visible')) this.previewKeyboardMove(false);
+    });
+    dom.addEventListener('blur', () => this.ctx.hover(null, null));
 
     window.addEventListener('keydown', (e) => {
-      if (e.key === 'r' || e.key === 'R') this.newGame();
-      else if (e.key === 'u' || e.key === 'U') this.undo();
-      else if (e.key === 'm' || e.key === 'M') this.toggleMute();
+      if (e.target === dom && this.handleBoardKey(e)) return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const tag = e.target?.tagName;
+      if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || e.target?.isContentEditable) return;
+      if (e.key === 'm' || e.key === 'M') {
+        e.preventDefault();
+        this.toggleMute();
+      } else if (!ui.isHomeVisible() && (e.key === 'r' || e.key === 'R')) {
+        if (this.phase === 'idle' || this.phase === 'over') {
+          e.preventDefault();
+          this.newGame();
+        }
+      } else if (!ui.isHomeVisible() && (e.key === 'u' || e.key === 'U')) {
+        e.preventDefault();
+        this.undo();
+      }
     });
 
     ui.onModeSelect((mode) => this.start(mode));
@@ -116,8 +129,9 @@ export class Game {
     ui.onHome(() => this.exitToHome());
     ui.onAgain(() => this.start(this.mode));
     ui.onReward((opt) => {
-      this.applyReward(opt);
-      this.nextLevel();
+      const accepted = this.applyReward(opt);
+      if (accepted) this.nextLevel();
+      return accepted;
     });
 
     this.difficulty = ui.getDifficulty();
@@ -134,7 +148,7 @@ export class Game {
   start(mode) {
     this.mode = mode;
     if (mode === 'cards') {
-      this.run = { level: 1, relics: [], bonus: [], handCap: 4 }; // 无尽:失败即止,连关数无上限
+      this.run = createRun(); // 无尽:失败即止,连关数无上限
       this.ui.setRunMode(true);
     } else {
       this.run = null;
@@ -153,14 +167,15 @@ export class Game {
     this.ctx.setIdleMode(true);
     this.ui.setCardsMode(false);
     this.ui.setRunMode(false);
-    this.ui.showHome();
+    this.ui.setShield(null);
+    this.ui.showHome(true);
     this.audio.click();
   }
 
   // ---------- 肉鸽闯关 ----------
 
   runCfg() {
-    return this.run ? runCfgFor(this.run.level) : null;
+    return this.run ? runConfigFor(this.run.level) : null;
   }
 
   aiDifficulty() {
@@ -179,33 +194,27 @@ export class Game {
   }
 
   rewardOptions() {
-    const opts = [];
-    const relic = RELIC_POOL[Math.floor(Math.random() * RELIC_POOL.length)];
-    opts.push({ kind: 'relic', id: relic.id });
-    // 核心成长项:手牌上限(封顶 10)
-    if (this.run.handCap < 10) {
-      opts.push({ kind: 'handcap' });
-    }
-    const card = CARD_POOL[Math.floor(Math.random() * CARD_POOL.length)];
-    opts.push({ kind: 'card', id: card.id });
-    return opts;
+    return rewardOptionsFor(this.run);
   }
 
   applyReward(opt) {
+    if (!grantReward(this.run, opt)) {
+      this.ui.toast('这件战利品无法生效,请重新选择', 2200);
+      this.audio.error();
+      return false;
+    }
     if (opt.kind === 'relic') {
-      if (!this.run.relics.includes(opt.id)) {
-        this.run.relics.push(opt.id);
-        if (opt.id === 'hat') this.run.handCap += 1; // 🎩手牌大师:手牌上限 +1
-      }
       this.ui.toast(`获得遗物 ${RELIC_META[opt.id].emoji} ${RELIC_META[opt.id].name}!`, 2200);
     } else if (opt.kind === 'handcap') {
-      this.run.handCap += 1;
-      this.ui.toast(`🀄 手牌上限 +1(现在 ${this.run.handCap}),每回合补满!`, 2200);
+      this.ui.toast(`🀄 手牌上限 +1(现在 ${this.run.handCap}),可以保留更多战术牌!`, 2200);
     } else {
-      this.hands[BLACK].push(opt.id);
-      this.ui.toast(`获得卡牌 ${CARD_META[opt.id].emoji} ${CARD_META[opt.id].name},立即入手!`, 2200);
+      this.ui.toast(
+        `获得卡牌 ${CARD_META[opt.id].emoji} ${CARD_META[opt.id].name},已加入后续关卡起始手牌!`,
+        2400
+      );
     }
     this.audio.win();
+    return true;
   }
 
   nextLevel() {
@@ -220,13 +229,51 @@ export class Game {
     const cell = this.ctx.cellFromPointer(event);
     if (!cell) return;
     if (this.legal.some(([r, c]) => r === cell.r && c === cell.c)) {
-      const cards = this.ui.getSelectedCards();
-      this.ui.clearCardSelection();
-      this.commitMove(cell.r, cell.c, BLACK, cards);
+      this.commitPlayerMove(cell.r, cell.c);
     } else {
       this.audio.error();
       this.ui.toast('这里不能落子');
     }
+  }
+
+  commitPlayerMove(r, c) {
+    const cards = this.ui.getSelectedCards();
+    if (this.mode === 'cards' && cardEnergy(cards) > this.currentCardEnergy) {
+      this.ui.toast('选牌超过本回合行动力');
+      this.audio.error();
+      return;
+    }
+    this.ui.clearCardSelection();
+    this.commitMove(r, c, BLACK, cards);
+  }
+
+  handleBoardKey(event) {
+    if (this.phase !== 'idle' || this.turn !== BLACK || this.legal.length === 0) return false;
+    if (['ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp'].includes(event.key)) {
+      event.preventDefault();
+      const direction = event.key === 'ArrowRight' || event.key === 'ArrowDown' ? 1 : -1;
+      this.keyboardMoveIndex =
+        (this.keyboardMoveIndex + direction + this.legal.length) % this.legal.length;
+      this.previewKeyboardMove(true);
+      return true;
+    }
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      const [r, c] = this.legal[this.keyboardMoveIndex] || this.legal[0];
+      this.commitPlayerMove(r, c);
+      return true;
+    }
+    return false;
+  }
+
+  previewKeyboardMove(announce = true) {
+    if (this.phase !== 'idle' || this.turn !== BLACK || !this.legal.length) return;
+    this.keyboardMoveIndex = Math.min(this.keyboardMoveIndex, this.legal.length - 1);
+    const [r, c] = this.legal[this.keyboardMoveIndex];
+    this.ctx.hover(r, c, BLACK);
+    const label = `${cellName(r, c)},第 ${this.keyboardMoveIndex + 1} 个合法落点,共 ${this.legal.length} 个`;
+    this.ctx.renderer.domElement.setAttribute('aria-label', `3D 黑白棋棋盘。当前 ${label}`);
+    if (announce) this.ui.announce(label);
   }
 
   handleMove(event) {
@@ -248,22 +295,43 @@ export class Game {
   // ---------- 手牌 ----------
 
   handCapFor(player) {
-    if (this.mode !== 'cards' || !this.run) return 0;
-    if (player === BLACK) return this.run.handCap + (this.run.relics.includes('hat') ? 1 : 0);
-    return 4 + this.runCfg().handBonus;
+    if (this.mode !== 'cards') return 0;
+    return handCapFor(this.run, player);
   }
 
-  // 每回合开始补满手牌(🍀幸运草:30% 额外多补 1 张)。
-  refill(player) {
+  // 开局补到上限;此后每回合只抽 1 张。🍀幸运草触发时额外抽 1 张。
+  refill(player, opening = false) {
     if (this.mode !== 'cards' || !this.run) return;
     const cap = this.handCapFor(player);
     const lucky = player === BLACK && this.run.relics.includes('clover') && Math.random() < 0.3;
-    const target = cap + (lucky ? 1 : 0);
-    while (this.hands[player].length < target) {
-      drawCard(this.hands[player], target + 1);
+    const limit = cap + (lucky ? 1 : 0);
+    let count = opening ? Math.max(0, limit - this.hands[player].length) : TURN_CARD_DRAW + (lucky ? 1 : 0);
+    let drawn = 0;
+    while (count-- > 0 && this.hands[player].length < limit) {
+      if (drawCard(this.hands[player], limit)) drawn++;
     }
-    if (player === BLACK) this.audio.cardDraw();
-    return target;
+    if (player === BLACK && drawn > 0) this.audio.cardDraw();
+    return drawn;
+  }
+
+  energyFor(player, penalty = 0) {
+    if (this.mode !== 'cards') return 0;
+    return Math.max(
+      0,
+      cardEnergyForTurn(
+        this.board,
+        player,
+        this.movesPlayed[player],
+        this.startingPlayer
+      ) - penalty
+    );
+  }
+
+  energyHintFor(player) {
+    if (this.movesPlayed[player] === 0) {
+      return player === this.startingPlayer ? '先手首轮' : '后手补偿';
+    }
+    return comebackActive(this.board, player) ? '逆风 +1' : '';
   }
 
   consumeCards(player, cards) {
@@ -286,12 +354,16 @@ export class Game {
         ? spawnBoard(RICH_PATTERNS[Math.floor(Math.random() * RICH_PATTERNS.length)], size)
         : initialBoard(size);
     this.ctx.resizeBoard(size);
-    this.hands = { [BLACK]: [], [WHITE]: [] };
+    this.hands = {
+      [BLACK]: this.mode === 'cards' ? startingHandFor(this.run) : [],
+      [WHITE]: [],
+    };
     this.shieldOwner = null;
+    this.ui.setShield(null);
     if (this.mode === 'cards' && this.run) {
       // 开局补满双方手牌(上限:玩家 handCap / 敌方 4+特权)
-      this.refill(BLACK);
-      this.refill(WHITE);
+      this.refill(BLACK, true);
+      this.refill(WHITE, true);
       // 敌方开局加子特权:从预设边线位依次放置(避开开局阵型)
       const cfg = this.runCfg();
       const spots = extraSpotsFor(size);
@@ -301,6 +373,9 @@ export class Game {
       }
     }
     this.turn = BLACK;
+    this.startingPlayer = BLACK;
+    this.movesPlayed = { [BLACK]: 0, [WHITE]: 0 };
+    this.currentCardEnergy = 0;
     this.phase = 'idle';
     this.history = [];
     this.lastMove = null;
@@ -313,15 +388,23 @@ export class Game {
     this.ui.setCardsMode(this.mode === 'cards');
     this.ui.setRunMode(this.mode === 'cards');
     if (this.run) {
-      this.ui.setRunInfo(this.run.level, this.board.length, this.run.relics, this.run.handCap, this.enemyPerksText());
+      this.ui.setRunInfo(
+        this.run.level,
+        this.board.length,
+        this.run.relics,
+        this.handCapFor(BLACK),
+        this.run.bonus.length,
+        this.enemyPerksText()
+      );
     }
     this.ui.clearCardSelection();
     this.updateScore();
     this.refreshLegal(true);
+    this.ctx.renderer.domElement.focus({ preventScroll: true });
     this.audio.click();
     this.ui.toast(
       this.mode === 'cards'
-        ? `第 ${this.run.level} 关 · ${this.board.length}×${this.board.length}${this.enemyPerksText() ? ' · ' + this.enemyPerksText() : ''}:每回合补满手牌,选牌排队后落子!`
+        ? `第 ${this.run.level} 关 · 开局 ${this.handCapFor(BLACK)} 张 · 此后每回合抽 1 张 · 先手行动力 1`
         : '新的一局,黑棋先行'
     );
   }
@@ -340,10 +423,21 @@ export class Game {
       hands: { [BLACK]: [...this.hands[BLACK]], [WHITE]: [...this.hands[WHITE]] },
       shieldOwner: this.shieldOwner,
       turn: this.turn,
+      movesPlayed: { ...this.movesPlayed },
     });
+    this.movesPlayed[player]++;
     this.consumeCards(player, cards);
     if (this.mode === 'cards') {
-      this.ui.renderHand(this.hands[BLACK], false);
+      if (player === BLACK) {
+        this.ui.renderHand(this.hands[BLACK], false);
+      } else {
+        this.ui.renderAiHand(
+          this.hands[WHITE].length,
+          this.currentCardEnergy,
+          this.energyHintFor(WHITE),
+          cardEnergy(cards)
+        );
+      }
     }
 
     // 护盾:对手的翻转被无效化(护盾随之消耗),盘面只落子不翻转
@@ -365,10 +459,11 @@ export class Game {
     await this.ctx.dropPiece(piece);
     if (gen !== this.generation) return;
     this.logTrace('impact');
-    this.audio.place();
-    this.ctx.shake(0.055);
-    this.ctx.punch();
+    this.audio.place(flips.length);
+    this.ctx.shake(0.045 + Math.min(flips.length, 10) * 0.0025);
+    this.ctx.punch(Math.min(flips.length / 5, 2));
     this.ctx.bounceNeighbors(r, c);
+    this.ctx.impactAt(r, c, player === BLACK ? 0xf0b84e : 0x8fb6ff);
     this.ctx.setLastMove(r, c);
 
     // ② 连锁翻面:按离落点距离排序,像多米诺一样逐波翻过去。
@@ -402,6 +497,7 @@ export class Game {
     if (shieldBlocked) {
       this.logTrace('shield');
       this.audio.shield();
+      this.ui.setShield(null);
       this.ui.toast('🛡️ 护盾挡下了翻转!', 2200);
       await delay(450);
       if (gen !== this.generation) return;
@@ -433,6 +529,18 @@ export class Game {
       }
     }
 
+    const n = this.board.length;
+    const corner = (r === 0 || r === n - 1) && (c === 0 || c === n - 1);
+    this.ui.showMoveFeedback({
+      player: player === BLACK ? '你' : '电脑',
+      flips: flips.length,
+      cards,
+      shielded: shieldBlocked,
+      corner,
+      extraTurn,
+    });
+    this.audio.moveResult({ flips: flips.length, cards: cards.length, corner, extraTurn });
+
     this.updateScore();
     if (isGameOver(this.board)) {
       this.endGame();
@@ -441,7 +549,7 @@ export class Game {
 
     if (extraTurn) {
       this.phase = 'idle';
-      this.refreshLegal();
+      this.refreshLegal(false, { drawCards: false, energyPenalty: 1 });
       return;
     }
     this.turn = player === BLACK ? WHITE : BLACK;
@@ -467,6 +575,23 @@ export class Game {
   // 结算单张卡牌:返回是否"连击"。prevCard 供🔁回响重复(顺序敏感)。
   async playCard(id, r, c, player, gen, prevCard) {
     this.audio.cardPlay(id);
+    const cardColors = {
+      combo: 0xffd27a,
+      blast: 0xff8a55,
+      lucky: 0x8fd8ff,
+      seed: 0x72d68f,
+      shield: 0x8fb6ff,
+      bomb: 0xff655f,
+      echo: 0xd0a7ff,
+      chain: 0xffc96b,
+    };
+    this.ctx.burst.spawn(
+      this.ctx.cellX(c),
+      this.ctx.cellY + 0.32,
+      this.ctx.cellZ(r),
+      id === 'combo' || id === 'shield' ? 48 : 34,
+      cardColors[id] || 0xffc96b
+    );
     await delay(120);
     if (gen !== this.generation) return false;
 
@@ -486,6 +611,7 @@ export class Game {
     }
     if (id === 'shield') {
       this.shieldOwner = player;
+      this.ui.setShield(player);
       this.audio.shield();
       this.ui.toast('🛡️ 护盾已激活:对手下一次翻转无效', 2200);
       return false;
@@ -528,7 +654,13 @@ export class Game {
         const p = this.ctx.pieceAt(tr, tc);
         if (p) {
           this.audio.bomb();
-          this.ctx.burst.spawn(this.ctx.cellX(tc), this.ctx.cellY + 0.3, this.ctx.cellZ(tr), 60);
+          this.ctx.burst.spawn(
+            this.ctx.cellX(tc),
+            this.ctx.cellY + 0.3,
+            this.ctx.cellZ(tr),
+            60,
+            0xff655f
+          );
           this.ctx.popPiece(p);
         }
       } else {
@@ -545,7 +677,7 @@ export class Game {
     return false;
   }
 
-  refreshLegal(isFirst = false) {
+  refreshLegal(isFirst = false, { drawCards = true, energyPenalty = 0 } = {}) {
     if (this.phase === 'over') return;
     const moves = legalMoves(this.board, this.turn);
     this.legal = moves;
@@ -554,12 +686,18 @@ export class Game {
       this.setTurnUi();
       if (this.turn === BLACK) {
         this.phase = 'idle';
+        this.keyboardMoveIndex = 0;
         this.ui.setLocked(false);
         this.ctx.setLegal(moves);
-        if (this.mode === 'cards' && !isFirst) this.refill(BLACK);
-        if (this.mode === 'cards') this.ui.renderHand(this.hands[BLACK], true);
+        if (this.mode === 'cards') {
+          if (!isFirst && drawCards) this.refill(BLACK);
+          this.currentCardEnergy = this.energyFor(BLACK, energyPenalty);
+          this.ui.setCardEnergy(this.currentCardEnergy, this.energyHintFor(BLACK));
+          this.ui.renderHand(this.hands[BLACK], true);
+        }
+        if (this.ctx.renderer.domElement.matches(':focus-visible')) this.previewKeyboardMove(false);
       } else {
-        this.scheduleAI();
+        this.scheduleAI({ drawCards: !isFirst && drawCards, energyPenalty });
       }
       return;
     }
@@ -577,19 +715,23 @@ export class Game {
     this.legal = next;
     if (this.turn === BLACK) {
       this.phase = 'idle';
+      this.keyboardMoveIndex = 0;
       this.ui.setLocked(false);
       this.setTurnUi();
       this.ctx.setLegal(next);
       if (this.mode === 'cards') {
         this.refill(BLACK);
+        this.currentCardEnergy = this.energyFor(BLACK);
+        this.ui.setCardEnergy(this.currentCardEnergy, this.energyHintFor(BLACK));
         this.ui.renderHand(this.hands[BLACK], true);
       }
+      if (this.ctx.renderer.domElement.matches(':focus-visible')) this.previewKeyboardMove(false);
     } else {
       this.scheduleAI();
     }
   }
 
-  scheduleAI() {
+  scheduleAI({ drawCards = true, energyPenalty = 0 } = {}) {
     if (this.phase === 'over') return;
     const gen = this.generation;
     this.phase = 'ai';
@@ -597,9 +739,12 @@ export class Game {
     this.ctx.clearLegal();
     this.setTurnUi();
     this.ui.setLocked(true);
+    let energy = 0;
     if (this.mode === 'cards') {
-      this.refill(WHITE);
-      this.ui.renderAiHand(this.hands[WHITE].length);
+      if (drawCards) this.refill(WHITE);
+      energy = this.energyFor(WHITE, energyPenalty);
+      this.currentCardEnergy = energy;
+      this.ui.renderAiHand(this.hands[WHITE].length, energy, this.energyHintFor(WHITE));
     }
     setTimeout(() => {
       if (gen !== this.generation || this.phase !== 'ai') return;
@@ -611,12 +756,25 @@ export class Game {
       }
       let cards = [];
       if (this.mode === 'cards') {
-        cards = chooseCards(this.board, this.hands[WHITE], WHITE, mv[0], mv[1], this.aiDifficulty());
+        cards = chooseCards(
+          this.board,
+          this.hands[WHITE],
+          WHITE,
+          mv[0],
+          mv[1],
+          this.aiDifficulty(),
+          energy
+        );
         for (const id of cards) {
           const idx = this.hands[WHITE].indexOf(id);
           if (idx >= 0) this.hands[WHITE].splice(idx, 1);
         }
-        this.ui.renderAiHand(this.hands[WHITE].length);
+        this.ui.renderAiHand(
+          this.hands[WHITE].length,
+          energy,
+          this.energyHintFor(WHITE),
+          cardEnergy(cards)
+        );
       }
       this.commitMove(mv[0], mv[1], WHITE, cards);
     }, 380 * (window.__QA_SLOWMO || 1));
@@ -629,6 +787,7 @@ export class Game {
     this.ctx.hover(null, null);
     this.ui.setLocked(false);
     this.ui.setCardsMode(false);
+    this.ui.setShield(null);
     this.setTurnUi();
 
     const { black, white } = countDiscs(this.board);
@@ -644,8 +803,8 @@ export class Game {
     if (winner) {
       const loser = winner === BLACK ? WHITE : BLACK;
       const cells = [];
-      for (let r = 0; r < SIZE; r++) {
-        for (let c = 0; c < SIZE; c++) {
+      for (let r = 0; r < this.board.length; r++) {
+        for (let c = 0; c < this.board.length; c++) {
           if (this.board[r][c] === loser) cells.push({ r, c });
         }
       }
@@ -714,6 +873,7 @@ export class Game {
           [WHITE]: [...snap.hands[WHITE]],
         };
         this.shieldOwner = snap.shieldOwner;
+        this.movesPlayed = { ...snap.movesPlayed };
         restored = true;
         break;
       }
@@ -725,6 +885,7 @@ export class Game {
     this.turn = BLACK;
     this.phase = 'idle';
     this.ui.clearCardSelection();
+    this.ui.setShield(this.shieldOwner);
     this.updateScore();
     this.audio.click();
     this.ui.toast('已悔棋');

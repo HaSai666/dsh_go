@@ -7,7 +7,10 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "qa": "node debug-headless.mjs && node analyze-shots.mjs && node mobile-smoke.mjs"
+    "test": "node test-logic.mjs",
+    "test:balance": "node balance-smoke.mjs",
+    "test:browser": "node interaction-smoke.mjs",
+    "qa": "npm run test && npm run test:balance && npm run test:browser && node debug-headless.mjs && node analyze-shots.mjs && node mobile-smoke.mjs"
   },
   "dependencies": {
     "three": "^0.180.0"

@@ -4,34 +4,36 @@
     <meta charset="UTF-8" />
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
+    <meta name="theme-color" content="#191410" />
+    <meta name="description" content="可用鼠标、触屏或键盘游玩的 3D 黑白棋与无尽卡牌模式。" />
     <title>黑白棋 · 3D 解压版</title>
     <link rel="icon" href="data:," />
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
     <div id="app"></div>
-    <div id="hud" class="inactive"></div>
-    <div id="home" class="home">
+    <div id="hud" class="inactive" aria-hidden="true"></div>
+    <main id="home" class="home" aria-labelledby="home-title">
       <div class="home-inner">
-        <h1 class="home-title">黑白棋 <span class="home-sub">3D 解压版</span></h1>
+        <h1 class="home-title" id="home-title">黑白棋 <span class="home-sub">3D 解压版</span></h1>
         <p class="home-tagline">策略对抗 · 手感解压 · 每一步都有音画反馈</p>
         <div class="mode-cards">
-          <button class="mode-card" id="mode-classic">
-            <div class="mode-emoji">⚫⚪</div>
+          <button class="mode-card" id="mode-classic" type="button" aria-describedby="classic-desc">
+            <div class="mode-emoji" aria-hidden="true">⚫⚪</div>
             <div class="mode-name">经典模式</div>
-            <div class="mode-desc">原汁原味的翻转棋,多米诺连锁翻面,解压感拉满</div>
+            <div class="mode-desc" id="classic-desc">原汁原味的翻转棋,多米诺连锁翻面,解压感拉满</div>
           </button>
-          <button class="mode-card" id="mode-cards">
-            <div class="mode-emoji">🃏</div>
+          <button class="mode-card" id="mode-cards" type="button" aria-describedby="cards-desc">
+            <div class="mode-emoji" aria-hidden="true">🃏</div>
             <div class="mode-name">无尽卡牌 <span class="badge">NEW</span></div>
-            <div class="mode-desc">无尽闯关,敌方特权无限递增,败北即止,挑战极限连关数</div>
+            <div class="mode-desc" id="cards-desc">行动力组牌,留牌反制,逆风追赶;败北即止,挑战极限连关数</div>
           </button>
         </div>
         <p class="home-tip">黑棋先行 · 点击发光格子落子 · 拖拽旋转视角 · R 重开 / U 悔棋 / M 静音</p>
       </div>
-    </div>
+    </main>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

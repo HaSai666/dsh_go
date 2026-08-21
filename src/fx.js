@@ -69,7 +69,8 @@ export function shakeBoard(group, tweens, strength = 0.05) {
 
 // 金色粒子爆裂:大翻盘时用。
 export class Burst {
-  constructor(scene) {
+  constructor(scene, shouldReduceMotion = () => false) {
+    this.shouldReduceMotion = shouldReduceMotion;
     this.max = 300;
     this.active = 0;
     this.age = 0;
@@ -92,8 +93,14 @@ export class Burst {
     scene.add(this.points);
   }
 
-  spawn(x, y, z, count = 120) {
+  spawn(x, y, z, count = 120, color = 0xffc96b) {
+    if (this.shouldReduceMotion()) {
+      this.points.visible = false;
+      this.active = 0;
+      return;
+    }
     const n = Math.min(count, this.max);
+    this.mat.color.setHex(color);
     this.active = n;
     this.age = 0;
     for (let i = 0; i < n; i++) {

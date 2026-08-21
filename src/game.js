@@ -6,6 +6,12 @@ export const EMPTY = 0;
 export const BLACK = 1;
 export const WHITE = 2;
 
+export const CARD_ENERGY_MAX = 3;
+export const FIRST_OPENING_ENERGY = 1;
+export const SECOND_OPENING_ENERGY = 2;
+export const COMEBACK_DISC_GAP = 12;
+export const TURN_CARD_DRAW = 1;
+
 export const DIRS = [
   [-1, -1], [-1, 0], [-1, 1],
   [0, -1],           [0, 1],
@@ -153,16 +159,35 @@ export function cellName(r, c) {
 // ---------- 卡牌模式(Buff 变体) ----------
 
 export const CARD_POOL = [
-  { id: 'combo', name: '连击', emoji: '⚡', desc: '立即再落一子' },
-  { id: 'blast', name: '爆裂', emoji: '💥', desc: '落点周围敌子全翻' },
-  { id: 'lucky', name: '天佑', emoji: '🎲', desc: '随机 2 枚敌子归顺' },
-  { id: 'seed', name: '播种', emoji: '🌱', desc: '相邻空格长出己方棋子' },
-  { id: 'shield', name: '护盾', emoji: '🛡️', desc: '对手下一次翻转无效' },
-  { id: 'bomb', name: '爆破', emoji: '💣', desc: '随机炸飞 2 枚敌子' },
-  { id: 'echo', name: '回响', emoji: '🔁', desc: '重复本步上一张卡的效果(顺序敏感!)' },
-  { id: 'chain', name: '连锁', emoji: '🧨', desc: '随机再翻 3 枚与己方相邻的敌子' },
+  { id: 'combo', name: '连击', emoji: '⚡', cost: 3, desc: '立即再落一子;额外回合不抽牌' },
+  { id: 'blast', name: '爆裂', emoji: '💥', cost: 2, desc: '落点周围敌子全翻' },
+  { id: 'lucky', name: '天佑', emoji: '🎲', cost: 2, desc: '随机 2 枚敌子归顺' },
+  { id: 'seed', name: '播种', emoji: '🌱', cost: 1, desc: '相邻空格长出己方棋子' },
+  { id: 'shield', name: '护盾', emoji: '🛡️', cost: 2, desc: '对手下一次翻转无效' },
+  { id: 'bomb', name: '爆破', emoji: '💣', cost: 2, desc: '随机炸飞 2 枚敌子' },
+  { id: 'echo', name: '回响', emoji: '🔁', cost: 1, desc: '重复本步上一张卡的效果(顺序敏感!)' },
+  { id: 'chain', name: '连锁', emoji: '🧨', cost: 2, desc: '随机再翻 3 枚与己方相邻的敌子' },
 ];
 export const CARD_META = Object.fromEntries(CARD_POOL.map((c) => [c.id, c]));
+
+export function cardEnergy(cards) {
+  return cards.reduce((sum, id) => sum + (CARD_META[id]?.cost || 0), 0);
+}
+
+export function comebackActive(board, player) {
+  const { black, white } = countDiscs(board);
+  const own = player === BLACK ? black : white;
+  const other = player === BLACK ? white : black;
+  return other - own >= COMEBACK_DISC_GAP;
+}
+
+// firstPlayer 是本关先手。双方首回合都受限,后手多 1 点用于组织反制。
+export function cardEnergyForTurn(board, player, movesPlayed, firstPlayer = BLACK) {
+  if (movesPlayed === 0) {
+    return player === firstPlayer ? FIRST_OPENING_ENERGY : SECOND_OPENING_ENERGY;
+  }
+  return CARD_ENERGY_MAX + (comebackActive(board, player) ? 1 : 0);
+}
 
 // 遗物:肉鸽闯关中整局生效的被动。
 export const RELIC_POOL = [

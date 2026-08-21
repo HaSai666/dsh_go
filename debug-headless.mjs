@@ -255,7 +255,7 @@ if (
   cardsInfo.mode !== 'cards' ||
   cardsInfo.level !== 1 ||
   cardsInfo.hand.length !== 4 ||
-  cardsInfo.aiHand !== 5 ||
+  cardsInfo.aiHand !== 4 ||
   uiCardCount !== 4 ||
   !runbarVisible
 ) {
@@ -298,20 +298,21 @@ await page.evaluate(() => {
   g.updateScore();
   window.__ui.hideGameOver();
   window.__ui.setCardsMode(true);
+  window.__ui.setCardEnergy(3);
   window.__ui.clearCardSelection();
   window.__ui.renderHand(g.hands[1], true);
 });
-// 依次点 lucky(第 2 张)→ blast(第 1 张),断言队列顺序
-await page.locator('#cardbar-cards .card').nth(1).click();
+// 依次点 seed(第 3 张,1 费)→ blast(第 1 张,2 费),断言队列顺序与预算
+await page.locator('#cardbar-cards .card').nth(2).click();
 await page.locator('#cardbar-cards .card').nth(0).click();
 const queue = await page.evaluate(() => window.__ui.getSelectedCards());
 const badgeCount = await page.locator('#cardbar-cards .card-order').count();
-if (JSON.stringify(queue) !== JSON.stringify(['lucky', 'blast']) || badgeCount !== 2) {
+if (JSON.stringify(queue) !== JSON.stringify(['seed', 'blast']) || badgeCount !== 2) {
   console.log(`❌ 触发顺序异常: queue=${JSON.stringify(queue)} badges=${badgeCount}`);
   process.exit(1);
 }
-// 再点一次 lucky 取消 → 队列只剩 blast
-await page.locator('#cardbar-cards .card').nth(1).click();
+// 再点一次 seed 取消 → 队列只剩 blast
+await page.locator('#cardbar-cards .card').nth(2).click();
 const queue2 = await page.evaluate(() => window.__ui.getSelectedCards());
 if (JSON.stringify(queue2) !== JSON.stringify(['blast'])) {
   console.log(`❌ 取消选牌异常: queue=${JSON.stringify(queue2)}`);
@@ -319,6 +320,20 @@ if (JSON.stringify(queue2) !== JSON.stringify(['blast'])) {
 }
 // 清空选牌,避免被随后的自动对弈消耗
 await page.evaluate(() => window.__ui.clearCardSelection());
+
+// 独立抓取非终局反馈,检查评级与卡牌顺序不会和手牌栏重叠。
+await page.evaluate(() =>
+  window.__ui.showMoveFeedback({
+    player: '你',
+    flips: 7,
+    cards: ['seed', 'blast'],
+    corner: false,
+    extraTurn: false,
+  })
+);
+await page.waitForTimeout(80);
+await shot('cards-行动反馈');
+await page.waitForTimeout(1500);
 
 console.log('→ 无尽模式自动对弈');
 await autoPlayMoves(2);
@@ -331,13 +346,15 @@ await page.evaluate(() => {
   if (g.phase === 'over') g.newGame();
 });
 await page.waitForTimeout(500);
-// 每回合补满手牌:玩家补到 4,敌方补到 5
-const refillInfo = await page.evaluate(() => ({
-  hand: window.__game.hands[1].length,
-  aiHand: window.__game.hands[2].length,
-}));
-if (refillInfo.hand !== 4 || refillInfo.aiHand !== 5) {
-  console.log(`❌ 补满手牌异常: hand=${refillInfo.hand} aiHand=${refillInfo.aiHand}`);
+// 常规回合只抽一张,且不会突破双方手牌上限。
+const refillInfo = await page.evaluate(() => {
+  const g = window.__game;
+  const before = g.hands[1].length;
+  const drawn = g.refill(1);
+  return { before, drawn, hand: g.hands[1].length, aiHand: g.hands[2].length };
+});
+if (refillInfo.drawn > 1 || refillInfo.hand > 4 || refillInfo.aiHand > 4) {
+  console.log(`❌ 单抽规则异常: ${JSON.stringify(refillInfo)}`);
   process.exit(1);
 }
 
@@ -348,6 +365,8 @@ await page.evaluate(() => {
   g.generation++;
   g.turn = BLACK;
   g.phase = 'idle';
+  g.movesPlayed[BLACK] = 1;
+  g.currentCardEnergy = 3;
   g.history = [];
   g.hands = { 1: ['blast'], 2: [] };
   g.shieldOwner = null;
@@ -362,6 +381,7 @@ await page.evaluate(() => {
   g.updateScore();
   window.__ui.hideGameOver();
   window.__ui.setCardsMode(true);
+  window.__ui.setCardEnergy(3);
   window.__ui.clearCardSelection();
   window.__ui.renderHand(g.hands[1], true);
 });
@@ -372,7 +392,18 @@ if (selected !== 1) {
   process.exit(1);
 }
 await clickCell(3, 5);
-await page.waitForTimeout(4000);
+await page.waitForFunction(
+  () => document.getElementById('move-feedback').classList.contains('show'),
+  null,
+  { timeout: 10000 }
+);
+const moveFeedbackText = await page.locator('#move-feedback').innerText();
+if (!moveFeedbackText.includes('爆裂')) {
+  console.log(`❌ 出牌汇总反馈异常: ${JSON.stringify(moveFeedbackText)}`);
+  process.exit(1);
+}
+await shot('cards-组合反馈');
+await page.waitForTimeout(2800);
 await cshot('cards-爆裂生效');
 const afterCards = await page.evaluate(() => {
   const g = window.__game;
@@ -481,10 +512,10 @@ if (runAfter.level !== 2 || !runAfter.rewardHidden) {
 }
 
 console.log('→ 肉鸽第 2 关 → 第 3 关(验证敌方特权递增)');
-// 第 2 关敌方手牌 = 3 + 手牌+1 = 4
+// 第 2 关双方手牌上限仍为 4
 const l2Hand = await page.evaluate(() => window.__game.hands[2].length);
 const l2Size = await page.evaluate(() => window.__game.board.length);
-if (l2Hand !== 5 || l2Size !== 13) {
+if (l2Hand !== 4 || l2Size !== 13) {
   console.log(`❌ 第 2 关敌方配置异常: aiHand=${l2Hand} size=${l2Size}`);
   process.exit(1);
 }
@@ -524,8 +555,8 @@ const l3 = await page.evaluate(() => {
   }
   return { level: g.run.level, aiHand: g.hands[2].length, white, size: g.board.length };
 });
-// 第 3 关:敌方手牌上限 4+2=6;白子 = 富开局 12 + 特权 2 = 14;棋盘 14×14
-const l3Ok = l3.level === 3 && l3.aiHand === 6 && l3.white === 14 && l3.size === 14;
+// 第 3 关:敌方手牌上限 4+1=5;白子 = 富开局 12 + 特权 2 = 14;棋盘 14×14
+const l3Ok = l3.level === 3 && l3.aiHand === 5 && l3.white === 14 && l3.size === 14;
 console.log(`→ 第 3 关特权校验: level=${l3.level} aiHand=${l3.aiHand} white=${l3.white} size=${l3.size}`);
 if (!l3Ok) {
   console.log('❌ 第 3 关敌方特权异常');
@@ -534,7 +565,7 @@ if (!l3Ok) {
 
 console.log('→ 肉鸽第 3 关 → 第 4 关(验证敌方特权)');
 const l3Hand = await page.evaluate(() => window.__game.hands[2].length);
-if (l3Hand !== 6) {
+if (l3Hand !== 5) {
   console.log(`❌ 第 3 关敌方手牌异常: ${l3Hand}`);
   process.exit(1);
 }
@@ -575,8 +606,8 @@ const l4 = await page.evaluate(() => {
   }
   return { level: g.run.level, aiHand: g.hands[2].length, white, size: g.board.length };
 });
-// 第 4 关:敌方手牌上限 4+2=6;白子 = 12 + 特权 3 = 15;棋盘 15×15
-const l4Ok = l4.level === 4 && l4.aiHand === 6 && l4.white === 15 && l4.size === 15;
+// 第 4 关:敌方手牌上限 4+1=5;白子 = 12 + 特权 3 = 15;棋盘 15×15
+const l4Ok = l4.level === 4 && l4.aiHand === 5 && l4.white === 15 && l4.size === 15;
 console.log(`→ 第 4 关特权校验: level=${l4.level} aiHand=${l4.aiHand} white=${l4.white} size=${l4.size}`);
 if (!l4Ok) {
   console.log('❌ 第 4 关敌方特权异常');
@@ -621,8 +652,8 @@ const l5 = await page.evaluate(() => {
   }
   return { level: g.run.level, aiHand: g.hands[2].length, white, size: g.board.length };
 });
-// 第 5 关:敌方手牌上限 4+3=7;白子 = 12 + 特权 4 = 16;棋盘 16×16
-const l5Ok = l5.level === 5 && l5.aiHand === 7 && l5.white === 16 && l5.size === 16;
+// 第 5 关:敌方手牌上限 4+2=6;白子 = 12 + 特权 4 = 16;棋盘 16×16
+const l5Ok = l5.level === 5 && l5.aiHand === 6 && l5.white === 16 && l5.size === 16;
 console.log(`→ 第 5 关特权校验: level=${l5.level} aiHand=${l5.aiHand} white=${l5.white} size=${l5.size}`);
 if (!l5Ok) {
   console.log('❌ 无尽模式特权递增异常');

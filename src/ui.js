@@ -11,44 +11,52 @@ export class UI {
       <div class="panel top-left">
         <div>黑白棋<span class="sub">3D 解压版</span></div>
         <div id="runbar" class="runbar hidden"></div>
+        <div id="statusbar" class="statusbar hidden"></div>
       </div>
       <div class="panel top-center scoreboard">
-        <div class="score black">
-          <span class="disc black"></span><b id="num-black">2</b>
+        <div class="score black" id="score-black" aria-label="黑棋 2 子">
+          <span class="disc black" aria-hidden="true"></span><b id="num-black">2</b>
         </div>
-        <div class="turnbox"><span id="turn-text">你的回合</span></div>
-        <div class="score white">
-          <b id="num-white">2</b><span class="disc white"></span>
+        <div class="turnbox" role="status" aria-live="polite"><span id="turn-text">你的回合</span></div>
+        <div class="score white" id="score-white" aria-label="白棋 2 子">
+          <b id="num-white">2</b><span class="disc white" aria-hidden="true"></span>
         </div>
       </div>
       <div class="panel top-right controls">
+        <label class="sr-only" for="sel-diff">电脑难度</label>
         <select id="sel-diff" title="电脑难度">
           <option value="easy">简单</option>
           <option value="normal" selected>普通</option>
           <option value="hard">困难</option>
         </select>
-        <button id="btn-undo" title="悔棋 (U)">悔棋</button>
-        <button id="btn-restart" title="重新开始 (R)">重开</button>
-        <button id="btn-mute" title="音效 (M)">🔊</button>
-        <button id="btn-home" title="返回主页">主页</button>
+        <button id="btn-undo" type="button" title="悔棋 (U)">悔棋</button>
+        <button id="btn-restart" type="button" title="重新开始 (R)">重开</button>
+        <button id="btn-mute" type="button" title="音效 (M)" aria-label="静音" aria-pressed="false">🔊</button>
+        <button id="btn-home" type="button" title="返回主页">主页</button>
       </div>
-      <div id="toast" class="toast"></div>
+      <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+      <div id="move-feedback" class="move-feedback" role="status" aria-live="polite" aria-atomic="true">
+        <b id="move-grade"></b><span id="move-detail"></span>
+      </div>
       <div id="cardbar" class="cardbar hidden">
         <div id="cardbar-label" class="cardbar-label"></div>
+        <div id="card-energy" class="card-energy" role="progressbar" aria-label="行动力"></div>
         <div id="cardbar-cards" class="cardbar-cards"></div>
       </div>
-      <div id="tooltip" class="tooltip hidden"></div>
+      <div id="tooltip" class="tooltip hidden" role="tooltip"></div>
       <div id="hint" class="hint">点击发光格子落子 · 拖拽旋转视角 · 滚轮缩放 · R 重开 / U 悔棋 / M 静音</div>
-      <div id="rotate-hint" class="rotate-hint">🔄 横屏体验更佳</div>
-      <div id="overlay" class="overlay hidden">
+      <div id="game-instructions" class="sr-only">棋盘获得焦点后,使用方向键切换合法落点,按 Enter 或空格落子。</div>
+      <div id="board-status" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
+      <div id="rotate-hint" class="rotate-hint" aria-hidden="true">🔄 横屏体验更佳</div>
+      <div id="overlay" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="over-title" aria-describedby="over-sub" hidden>
         <div class="overlay-card">
           <div id="over-title" class="over-title">你赢了!</div>
           <div id="over-score" class="over-score">33 : 31</div>
           <div id="over-sub" class="over-sub">漂亮!再下一局?</div>
-          <button id="btn-again" class="btn-primary">再来一局</button>
+          <button id="btn-again" class="btn-primary" type="button">再来一局</button>
         </div>
       </div>
-      <div id="reward" class="overlay hidden">
+      <div id="reward" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="reward-title" aria-describedby="reward-sub" hidden>
         <div class="overlay-card">
           <div id="reward-title" class="over-title">第 1 关通过!</div>
           <div id="reward-score" class="over-score">30 : 20</div>
@@ -61,6 +69,8 @@ export class UI {
       hud: this.el,
       numBlack: document.getElementById('num-black'),
       numWhite: document.getElementById('num-white'),
+      scoreBlack: document.getElementById('score-black'),
+      scoreWhite: document.getElementById('score-white'),
       turn: document.getElementById('turn-text'),
       diff: document.getElementById('sel-diff'),
       undo: document.getElementById('btn-undo'),
@@ -70,9 +80,14 @@ export class UI {
       toast: document.getElementById('toast'),
       cardbar: document.getElementById('cardbar'),
       cardLabel: document.getElementById('cardbar-label'),
+      cardEnergy: document.getElementById('card-energy'),
       cardCards: document.getElementById('cardbar-cards'),
       tooltip: document.getElementById('tooltip'),
       runbar: document.getElementById('runbar'),
+      statusbar: document.getElementById('statusbar'),
+      moveFeedback: document.getElementById('move-feedback'),
+      moveGrade: document.getElementById('move-grade'),
+      moveDetail: document.getElementById('move-detail'),
       overlay: document.getElementById('overlay'),
       overTitle: document.getElementById('over-title'),
       overScore: document.getElementById('over-score'),
@@ -81,20 +96,44 @@ export class UI {
       reward: document.getElementById('reward'),
       rewardTitle: document.getElementById('reward-title'),
       rewardScore: document.getElementById('reward-score'),
+      rewardSub: document.getElementById('reward-sub'),
       rewardOptions: document.getElementById('reward-options'),
+      boardStatus: document.getElementById('board-status'),
     };
     this.homeEl = document.getElementById('home');
     this.cardsMode = false;
     this.runMode = false;
-    this.cardQueue = []; // 选牌顺序队列:顺序即触发顺序
+    this.cardQueue = []; // 手牌索引队列:重复卡牌也能逐张选择
     this._lastHand = [];
     this._lastSelectable = false;
+    this.cardEnergyMax = 0;
+    this.cardEnergyHint = '';
     this._toastTimer = null;
+    this._moveFeedbackTimer = null;
+    this._activeDialog = null;
+
+    const savedDifficulty = localStorage.getItem('othello3d-difficulty');
+    if (['easy', 'normal', 'hard'].includes(savedDifficulty)) {
+      this.els.diff.value = savedDifficulty;
+    }
+    document.addEventListener('keydown', (event) => this.trapDialogFocus(event));
   }
 
   setScores(b, w) {
+    const oldBlack = Number(this.els.numBlack.textContent);
+    const oldWhite = Number(this.els.numWhite.textContent);
     this.els.numBlack.textContent = b;
     this.els.numWhite.textContent = w;
+    this.els.scoreBlack.setAttribute('aria-label', `黑棋 ${b} 子`);
+    this.els.scoreWhite.setAttribute('aria-label', `白棋 ${w} 子`);
+    if (oldBlack !== b) this.pulseScore(this.els.scoreBlack);
+    if (oldWhite !== w) this.pulseScore(this.els.scoreWhite);
+  }
+
+  pulseScore(score) {
+    score.classList.remove('score-pop');
+    void score.offsetWidth;
+    score.classList.add('score-pop');
   }
 
   setTurn(text, thinking = false) {
@@ -110,6 +149,50 @@ export class UI {
     this._toastTimer = setTimeout(() => t.classList.remove('show'), dur);
   }
 
+  announce(msg) {
+    this.els.boardStatus.textContent = '';
+    requestAnimationFrame(() => {
+      this.els.boardStatus.textContent = msg;
+    });
+  }
+
+  showMoveFeedback({ player, flips, cards = [], shielded = false, corner = false, extraTurn = false }) {
+    let grade = '落子';
+    let tone = 'plain';
+    if (shielded) {
+      grade = '护盾格挡';
+      tone = 'guard';
+    } else if (corner) {
+      grade = '角位到手';
+      tone = 'great';
+    } else if (flips >= 10) {
+      grade = '逆转';
+      tone = 'great';
+    } else if (flips >= 6) {
+      grade = '强攻';
+      tone = 'strong';
+    } else if (flips >= 3) {
+      grade = '好棋';
+      tone = 'good';
+    }
+
+    const parts = [`${player} · 翻 ${flips} 子`];
+    if (cards.length) {
+      parts.push(cards.map((id) => CARD_META[id]?.name).filter(Boolean).join(' → '));
+    }
+    if (extraTurn) parts.push('获得额外回合');
+    this.els.moveGrade.textContent = grade;
+    this.els.moveDetail.textContent = parts.join(' · ');
+    this.els.moveFeedback.className = `move-feedback ${tone}`;
+    void this.els.moveFeedback.offsetWidth;
+    this.els.moveFeedback.classList.add('show');
+    clearTimeout(this._moveFeedbackTimer);
+    this._moveFeedbackTimer = setTimeout(
+      () => this.els.moveFeedback.classList.remove('show'),
+      1500
+    );
+  }
+
   setLocked(locked) {
     this.els.undo.disabled = locked;
     this.els.restart.disabled = locked;
@@ -122,24 +205,28 @@ export class UI {
 
   setMuted(muted) {
     this.els.mute.textContent = muted ? '🔇' : '🔊';
+    this.els.mute.setAttribute('aria-label', muted ? '开启音效' : '静音');
+    this.els.mute.setAttribute('aria-pressed', String(muted));
   }
 
   showGameOver({ title, score, sub }) {
     this.els.overTitle.textContent = title;
     this.els.overScore.textContent = score;
     this.els.overSub.textContent = sub;
-    this.els.overlay.classList.remove('hidden');
+    this.els.again.textContent = '再来一局';
+    this.openDialog(this.els.overlay, this.els.again);
   }
 
   hideGameOver() {
-    this.els.overlay.classList.add('hidden');
-    this.els.reward.classList.add('hidden');
+    this.closeDialog(this.els.overlay);
+    this.closeDialog(this.els.reward);
   }
 
   // ---------- 卡牌栏 ----------
 
   setCardsMode(on) {
     this.cardsMode = on;
+    this.els.hud.classList.toggle('cards-active', on);
     if (!on) this.els.cardbar.classList.add('hidden');
   }
 
@@ -149,7 +236,7 @@ export class UI {
     this.els.diff.style.display = on ? 'none' : '';
   }
 
-  setRunInfo(level, size, relics, handCap, enemyText = '') {
+  setRunInfo(level, size, relics, handCap, bonusCount = 0, enemyText = '') {
     if (!this.runMode) {
       this.els.runbar.classList.add('hidden');
       return;
@@ -158,50 +245,122 @@ export class UI {
     const relicsText = relics.map((r) => RELIC_META[r].emoji).join(' ');
     this.els.runbar.textContent =
       `无尽 · 第 ${level} 关 · ${size}×${size} · 🀄×${handCap}` +
+      `${bonusCount ? ` · 奖励卡×${bonusCount}` : ''}` +
       `${relicsText ? ' ' + relicsText : ''}${enemyText ? ' · ' + enemyText : ''}`;
+    this.els.runbar.title = this.els.runbar.textContent;
   }
 
-  renderHand(hand, selectable) {
+  setShield(owner) {
+    if (!owner) {
+      this.els.statusbar.classList.add('hidden');
+      this.els.statusbar.textContent = '';
+      return;
+    }
+    this.els.statusbar.classList.remove('hidden');
+    this.els.statusbar.textContent = `护盾生效 · ${owner === 1 ? '你' : '电脑'}`;
+  }
+
+  setCardEnergy(max, hint = '') {
+    this.cardEnergyMax = max;
+    this.cardEnergyHint = hint;
+  }
+
+  selectedCardEnergy() {
+    return this.cardQueue.reduce(
+      (sum, index) => sum + (CARD_META[this._lastHand[index]]?.cost || 0),
+      0
+    );
+  }
+
+  renderCardEnergy(used = 0, max = this.cardEnergyMax, label = '你的行动力') {
+    this.els.cardEnergy.innerHTML = '';
+    for (let i = 0; i < max; i++) {
+      const pip = document.createElement('span');
+      pip.className = `energy-pip${i < used ? ' spent' : ''}`;
+      this.els.cardEnergy.appendChild(pip);
+    }
+    this.els.cardEnergy.setAttribute('aria-valuemin', '0');
+    this.els.cardEnergy.setAttribute('aria-valuemax', String(max));
+    this.els.cardEnergy.setAttribute('aria-valuenow', String(Math.max(0, max - used)));
+    this.els.cardEnergy.setAttribute('aria-label', `${label},剩余 ${Math.max(0, max - used)} / ${max}`);
+  }
+
+  renderHand(hand, selectable, focusIndex = null) {
     if (!this.cardsMode) return;
     this._lastHand = hand;
     this._lastSelectable = selectable;
+    this.cardQueue = this.cardQueue.filter((index) => index >= 0 && index < hand.length);
+    while (this.cardQueue.length && hand[this.cardQueue[0]] === 'echo') {
+      this.cardQueue.shift();
+    }
+    const usedEnergy = this.selectedCardEnergy();
     this.els.cardbar.classList.remove('hidden');
     this.els.cardCards.innerHTML = '';
     hand.forEach((id, idx) => {
       const meta = CARD_META[id];
       const btn = document.createElement('button');
+      btn.type = 'button';
       btn.className = 'card';
       btn.dataset.id = id;
       btn.dataset.index = idx;
-      btn.innerHTML = `<span class="card-emoji">${meta.emoji}</span><span class="card-name">${meta.name}</span>`;
+      btn.innerHTML = `<span class="card-cost" aria-hidden="true">${meta.cost}</span><span class="card-emoji">${meta.emoji}</span><span class="card-name">${meta.name}</span>`;
+      btn.setAttribute('aria-label', `${meta.name},费用 ${meta.cost}:${meta.desc}`);
       if (selectable) {
-        const order = this.cardQueue.indexOf(id);
+        const order = this.cardQueue.indexOf(idx);
         if (order >= 0) {
           btn.classList.add('selected');
           btn.insertAdjacentHTML('beforeend', `<span class="card-order">${ORDER_MARKS[order]}</span>`);
         }
+        btn.setAttribute('aria-pressed', String(order >= 0));
+        const previousId = this.cardQueue.length
+          ? hand[this.cardQueue[this.cardQueue.length - 1]]
+          : null;
+        const echoHasNoTarget = id === 'echo' && (!previousId || previousId === 'echo');
+        if (order < 0 && (usedEnergy + meta.cost > this.cardEnergyMax || echoHasNoTarget)) {
+          btn.classList.add('unaffordable');
+          btn.setAttribute('aria-disabled', 'true');
+        }
         btn.addEventListener('click', () => {
-          if (this.cardQueue.includes(id)) {
-            this.cardQueue = this.cardQueue.filter((x) => x !== id);
+          if (this.cardQueue.includes(idx)) {
+            this.cardQueue = this.cardQueue.filter((index) => index !== idx);
           } else {
-            this.cardQueue.push(id);
+            const lastId = this.cardQueue.length
+              ? this._lastHand[this.cardQueue[this.cardQueue.length - 1]]
+              : null;
+            if (id === 'echo' && (!lastId || lastId === 'echo')) {
+              this.toast('「回响」必须排在另一张卡后面');
+              return;
+            }
+            if (this.selectedCardEnergy() + meta.cost > this.cardEnergyMax) {
+              this.toast(`行动力不足:「${meta.name}」需要 ${meta.cost} 点`);
+              return;
+            }
+            this.cardQueue.push(idx);
           }
-          this.renderHand(this._lastHand, this._lastSelectable);
+          this.renderHand(this._lastHand, this._lastSelectable, idx);
         });
-        btn.addEventListener('mouseenter', (e) => this.showTooltip(e.currentTarget, this.cardTip(meta)));
-        btn.addEventListener('mouseleave', () => this.hideTooltip());
       } else {
         btn.classList.add('disabled');
+        btn.disabled = true;
       }
+      btn.addEventListener('mouseenter', (e) => this.showTooltip(e.currentTarget, this.cardTip(meta)));
+      btn.addEventListener('mouseleave', () => this.hideTooltip());
+      btn.addEventListener('focus', (e) => this.showTooltip(e.currentTarget, this.cardTip(meta)));
+      btn.addEventListener('blur', () => this.hideTooltip());
       this.els.cardCards.appendChild(btn);
     });
+    this.renderCardEnergy(usedEnergy);
     this.els.cardLabel.textContent = selectable
-      ? '你的手牌 · 依次点击排队(顺序即触发顺序)· 再点一次取消 · 选完点击棋盘落子'
+      ? `你的手牌 · 已用 ${usedEnergy}/${this.cardEnergyMax}${this.cardEnergyHint ? ` · ${this.cardEnergyHint}` : ''} · 按触发顺序选牌`
       : '你的手牌 · 动画结算中…';
+    if (focusIndex !== null) {
+      requestAnimationFrame(() => this.els.cardCards.children[focusIndex]?.focus());
+    }
   }
 
   cardTip(meta) {
-    return `<b>${meta.emoji} ${meta.name}</b><br>${meta.desc}`;
+    const cost = meta.cost ? ` · 行动力 ${meta.cost}` : '';
+    return `<b>${meta.emoji} ${meta.name}${cost}</b><br>${meta.desc}`;
   }
 
   showTooltip(el, html) {
@@ -218,15 +377,16 @@ export class UI {
     this.els.tooltip.classList.add('hidden');
   }
 
-  renderAiHand(count) {
+  renderAiHand(count, energy = 0, hint = '', used = 0) {
     if (!this.cardsMode) return;
     this.els.cardbar.classList.remove('hidden');
     this.els.cardCards.innerHTML = '';
-    this.els.cardLabel.textContent = `电脑手牌 · ${count} 张`;
+    this.els.cardLabel.textContent = `电脑手牌 · ${count} 张 · 已用 ${used}/${energy}${hint ? ` · ${hint}` : ''}`;
+    this.renderCardEnergy(used, energy, '电脑行动力');
   }
 
   getSelectedCards() {
-    return [...this.cardQueue];
+    return this.cardQueue.map((index) => this._lastHand[index]).filter(Boolean);
   }
 
   clearCardSelection() {
@@ -245,21 +405,33 @@ export class UI {
     for (const opt of options) {
       let meta;
       if (opt.kind === 'handcap') {
-        meta = { emoji: '🀄', name: '手牌上限', desc: '永久 +1:每回合补满手牌的上限' };
+        meta = { emoji: '🀄', name: '手牌上限', desc: '永久 +1:可以保留更多战术牌' };
       } else {
         meta = opt.kind === 'relic' ? RELIC_META[opt.id] : CARD_META[opt.id];
       }
       const kindText = opt.kind === 'relic' ? '遗物' : opt.kind === 'handcap' ? '成长' : '卡牌';
       const btn = document.createElement('button');
+      btn.type = 'button';
       btn.className = 'reward-opt';
       btn.innerHTML = `<span class="reward-emoji">${meta.emoji}</span>
         <span class="reward-text"><b>${kindText} · ${meta.name}</b><span>${meta.desc}</span></span>`;
-      btn.addEventListener('click', () => this._onReward?.(opt));
+      btn.setAttribute('aria-label', `${kindText} ${meta.name}:${meta.desc}`);
+      btn.addEventListener('click', () => {
+        this.els.rewardOptions.querySelectorAll('button').forEach((option) => {
+          option.disabled = true;
+        });
+        const accepted = this._onReward?.(opt);
+        if (accepted === false) {
+          this.els.rewardOptions.querySelectorAll('button').forEach((option) => {
+            option.disabled = false;
+          });
+        }
+      });
       btn.addEventListener('mouseenter', (e) => this.showTooltip(e.currentTarget, this.cardTip(meta)));
       btn.addEventListener('mouseleave', () => this.hideTooltip());
       this.els.rewardOptions.appendChild(btn);
     }
-    this.els.reward.classList.remove('hidden');
+    this.openDialog(this.els.reward, this.els.rewardOptions.querySelector('button'));
   }
 
   showRunOver(level, score) {
@@ -267,7 +439,7 @@ export class UI {
     this.els.overScore.textContent = score;
     this.els.overSub.textContent = `无尽模式 · 止步第 ${level} 关 · 遗物和卡牌都丢了,再闯一次!`;
     this.els.again.textContent = '再闯一次';
-    this.els.overlay.classList.remove('hidden');
+    this.openDialog(this.els.overlay, this.els.again);
   }
 
   showRunComplete(score) {
@@ -275,7 +447,7 @@ export class UI {
     this.els.overScore.textContent = score;
     this.els.overSub.textContent = '四关全部征服,再闯一次刷新纪录!';
     this.els.again.textContent = '再闯一次';
-    this.els.overlay.classList.remove('hidden');
+    this.openDialog(this.els.overlay, this.els.again);
   }
 
   onReward(cb) {
@@ -284,15 +456,73 @@ export class UI {
 
   // ---------- 主页 ----------
 
-  showHome() {
+  showHome(focusMode = false) {
     this.homeEl.classList.remove('hidden');
     this.els.hud.classList.add('inactive');
+    this.els.hud.setAttribute('aria-hidden', 'true');
+    this.els.hud.inert = true;
+    document.getElementById('app').inert = true;
+    this.homeEl.setAttribute('aria-hidden', 'false');
+    this.homeEl.inert = false;
     this.hideGameOver();
+    if (focusMode) {
+      requestAnimationFrame(() => document.getElementById('mode-classic').focus());
+    }
   }
 
   hideHome() {
     this.homeEl.classList.add('hidden');
+    this.homeEl.setAttribute('aria-hidden', 'true');
+    this.homeEl.inert = true;
     this.els.hud.classList.remove('inactive');
+    this.els.hud.setAttribute('aria-hidden', 'false');
+    this.els.hud.inert = false;
+    document.getElementById('app').inert = false;
+  }
+
+  isHomeVisible() {
+    return !this.homeEl.classList.contains('hidden');
+  }
+
+  openDialog(dialog, focusTarget) {
+    dialog.hidden = false;
+    dialog.classList.remove('hidden');
+    this._activeDialog = dialog;
+    document.getElementById('app').inert = true;
+    [...this.el.children].forEach((child) => {
+      if (child !== dialog) child.inert = true;
+    });
+    requestAnimationFrame(() => focusTarget?.focus());
+  }
+
+  closeDialog(dialog) {
+    dialog.classList.add('hidden');
+    dialog.hidden = true;
+    if (this._activeDialog === dialog) {
+      this._activeDialog = null;
+      document.getElementById('app').inert = this.isHomeVisible();
+      [...this.el.children].forEach((child) => {
+        child.inert = false;
+      });
+    }
+  }
+
+  trapDialogFocus(event) {
+    if (event.key !== 'Tab' || !this._activeDialog) return;
+    const focusable = [...this._activeDialog.querySelectorAll('button:not(:disabled), select:not(:disabled), [tabindex]:not([tabindex="-1"])')];
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (!this._activeDialog.contains(document.activeElement)) {
+      event.preventDefault();
+      first.focus();
+    } else if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
   }
 
   onModeSelect(cb) {
@@ -301,7 +531,10 @@ export class UI {
   }
 
   onDifficulty(cb) {
-    this.els.diff.addEventListener('change', () => cb(this.getDifficulty()));
+    this.els.diff.addEventListener('change', () => {
+      localStorage.setItem('othello3d-difficulty', this.getDifficulty());
+      cb(this.getDifficulty());
+    });
   }
 
   onUndo(cb) {

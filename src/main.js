@@ -29,12 +29,24 @@ ctx.setIdleMode(true);
 ui.showHome();
 
 // 浏览器要求用户手势后才能出声:首次交互时创建/恢复 AudioContext。
-window.addEventListener('pointerdown', () => audio.ensure());
+window.addEventListener('pointerdown', () => audio.ensure(), { capture: true, passive: true });
+window.addEventListener('keydown', () => audio.ensure(), { capture: true });
 
 const clock = new THREE.Clock();
+let frameId = null;
 function loop() {
   const dt = Math.min(clock.getDelta(), 0.05);
   ctx.update(dt, clock.elapsedTime);
-  requestAnimationFrame(loop);
+  frameId = requestAnimationFrame(loop);
 }
-loop();
+frameId = requestAnimationFrame(loop);
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && frameId !== null) {
+    cancelAnimationFrame(frameId);
+    frameId = null;
+  } else if (!document.hidden && frameId === null) {
+    clock.getDelta();
+    frameId = requestAnimationFrame(loop);
+  }
+});

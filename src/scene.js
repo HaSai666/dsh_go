@@ -21,6 +21,7 @@ function cellZ(r) {
 }
 
 export function buildScene(container) {
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -107,11 +108,13 @@ export function buildScene(container) {
 
   function buildBase(size) {
     // 清空旧底座
+    const oldGeometries = new Set();
     for (const child of [...baseGroup.children]) {
       baseGroup.remove(child);
+      if (child.geometry) oldGeometries.add(child.geometry);
       if (child.material && child.material !== frameMat) child.material.dispose();
     }
-    if (cellGeo) cellGeo.dispose();
+    for (const geometry of oldGeometries) geometry.dispose();
     cells = [];
     cellGeo = new THREE.PlaneGeometry(0.92, 0.92);
 
@@ -292,8 +295,24 @@ export function buildScene(container) {
   lastMarker.visible = false;
   pieceGroup.add(lastMarker);
 
+  // 落点冲击波:每步只复用一个环,不持续占用新几何体。
+  const impactRing = new THREE.Mesh(
+    new THREE.RingGeometry(0.24, 0.32, 48),
+    new THREE.MeshBasicMaterial({
+      color: 0xf0b84e,
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    })
+  );
+  impactRing.rotation.x = -Math.PI / 2;
+  impactRing.position.y = CELL_Y + 0.035;
+  impactRing.visible = false;
+  pieceGroup.add(impactRing);
+
   const tweens = new Tweens();
-  const burst = new Burst(scene);
+  const burst = new Burst(scene, () => reduceMotion.matches);
   const raycaster = new THREE.Raycaster();
 
   // ---- 高亮管理 ----
@@ -342,6 +361,10 @@ export function buildScene(container) {
   // 坠落拍击:自由落体曲线,Promise 在拍上棋盘时 resolve。
   // QA 慢动作下同步拉长,便于无头定点抓拍(生产恒为 1)。
   function dropPiece(piece) {
+    if (reduceMotion.matches) {
+      piece.mesh.position.y = PIECE_Y;
+      return Promise.resolve();
+    }
     const ts = window.__QA_SLOWMO || 1;
     return new Promise((resolve) => {
       tweens.add({
@@ -360,6 +383,7 @@ export function buildScene(container) {
 
   // 邻近棋子被震得跳一下。
   function bounceNeighbors(r, c) {
+    if (reduceMotion.matches) return;
     for (let dr = -1; dr <= 1; dr++) {
       for (let dc = -1; dc <= 1; dc++) {
         if (dr === 0 && dc === 0) continue;
@@ -389,6 +413,13 @@ export function buildScene(container) {
   // 翻面:绕"垂直于 落点→棋子 方向"的水平轴翻转半圈,半程换色。
   // 翻转时小跳 + 横向收窄,防止棋子边缘在旋转中穿过格面造成穿插/闪烁。
   function flipPiece(piece, color, axisX, axisZ) {
+    if (reduceMotion.matches) {
+      piece.mesh.quaternion.identity();
+      piece.mesh.position.y = PIECE_Y;
+      piece.mesh.scale.set(1, 1, 1);
+      setPieceColor(piece, color);
+      return Promise.resolve();
+    }
     return new Promise((resolve) => {
       const axis = new THREE.Vector3(axisX, 0, axisZ).normalize();
       let swapped = false;
@@ -427,8 +458,36 @@ export function buildScene(container) {
     lastMarker.visible = false;
   }
 
+  function impactAt(r, c, color = 0xf0b84e) {
+    if (reduceMotion.matches) {
+      impactRing.visible = false;
+      return;
+    }
+    impactRing.visible = true;
+    impactRing.material.color.setHex(color);
+    impactRing.material.opacity = 0.95;
+    impactRing.position.set(cellX(c), CELL_Y + 0.035, cellZ(r));
+    impactRing.scale.setScalar(0.7);
+    tweens.add({
+      dur: 0.48,
+      ease: easings.easeOutCubic,
+      update: (e) => {
+        impactRing.scale.setScalar(0.7 + e * 2.5);
+        impactRing.material.opacity = 0.95 * (1 - e);
+      },
+      done: () => {
+        impactRing.visible = false;
+        impactRing.material.opacity = 0;
+      },
+    });
+  }
+
   // 爆破卡:棋子被炸飞(放大+上升后消失)。
   function popPiece(piece) {
+    if (reduceMotion.matches) {
+      piece.mesh.visible = false;
+      return Promise.resolve();
+    }
     return new Promise((resolve) => {
       tweens.add({
         dur: 0.28,
@@ -506,12 +565,14 @@ export function buildScene(container) {
   }
 
   // 落子"推冲":FOV 快速鼓一下再收回,配合拍击给镜头一个力量感。
-  function punch() {
+  function punch(strength = 1) {
+    if (reduceMotion.matches) return;
+    const amount = 2.4 + Math.min(Math.max(strength, 0), 2) * 1.2;
     tweens.add({
       dur: 0.34,
       ease: easings.linear,
       update: (_, k) => {
-        camera.fov = 35 + 3.4 * Math.sin(Math.PI * k);
+        camera.fov = 35 + amount * Math.sin(Math.PI * k);
         camera.updateProjectionMatrix();
       },
       done: () => {
@@ -526,16 +587,26 @@ export function buildScene(container) {
     tweens.update(dt);
     burst.update(dt);
     // 主页氛围:空棋盘缓缓自转;进入游戏后平滑归零。
-    if (idleMode) {
+    if (reduceMotion.matches) {
+      boardGroup.rotation.y = 0;
+      controls.enableDamping = false;
+      controls.target.set(0, 0.1, 0);
+    } else if (idleMode) {
+      controls.enableDamping = true;
       boardGroup.rotation.y += dt * 0.2;
     } else if (boardGroup.rotation.y !== 0) {
+      controls.enableDamping = true;
       boardGroup.rotation.y *= Math.max(0, 1 - dt * 3);
       if (Math.abs(boardGroup.rotation.y) < 0.001) boardGroup.rotation.y = 0;
+    } else {
+      controls.enableDamping = true;
     }
     // 鼠标视差:镜头目标点柔和追随光标,盘面始终"活着"。
-    const k = Math.min(1, dt * 4);
-    controls.target.x += (mouseNdc.x * 0.55 - controls.target.x) * k;
-    controls.target.y += (0.1 - mouseNdc.y * 0.3 - controls.target.y) * k;
+    if (!reduceMotion.matches) {
+      const k = Math.min(1, dt * 4);
+      controls.target.x += (mouseNdc.x * 0.55 - controls.target.x) * k;
+      controls.target.y += (0.1 - mouseNdc.y * 0.3 - controls.target.y) * k;
+    }
     controls.update();
     renderer.render(scene, camera);
   }
@@ -558,6 +629,7 @@ export function buildScene(container) {
   let idleMode = false;
   function setIdleMode(on) {
     idleMode = on;
+    if (reduceMotion.matches) boardGroup.rotation.y = 0;
   }
 
   return {
@@ -584,10 +656,13 @@ export function buildScene(container) {
     popPiece,
     setLastMove,
     clearLastMove,
+    impactAt,
     syncBoard,
     cellFromPointer,
     pieceAt: (r, c) => pieceByCell.get(r * curSize + c) || null,
-    shake: (strength) => shakeBoard(boardGroup, tweens, strength),
+    shake: (strength) => {
+      if (!reduceMotion.matches) shakeBoard(boardGroup, tweens, strength);
+    },
     punch,
     resizeBoard,
     update,
