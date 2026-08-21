@@ -78,19 +78,9 @@ async function probe(viewport, label) {
         camPos: ctx.camera.position.toArray(),
         target: ctx.controls.target.toArray(),
       };
-      // 反查:该屏幕点应该命中哪个格子
-      const ndc = new window.__THREE.Vector2(
-        (p.x / innerWidth) * 2 - 1,
-        -(p.y / innerHeight) * 2 + 1
-      );
-      const ray = new window.__THREE.Raycaster();
-      ray.setFromCamera(ndc, ctx.camera);
-      const cells = [];
-      window.__ctx.scene.traverse((o) => {
-        if (o.userData && o.userData.r !== undefined) cells.push(o);
-      });
-      const hits = ray.intersectObjects(cells, false);
-      info.rayHits = hits.length ? [hits[0].object.userData.r, hits[0].object.userData.c] : null;
+      // 反查走正式拾取接口,兼容独立网格与 InstancedMesh 两种实现。
+      const hit = ctx.cellFromPointer({ clientX: p.x, clientY: p.y });
+      info.rayHits = hit ? [hit.r, hit.c] : null;
       return info;
     },
     pt

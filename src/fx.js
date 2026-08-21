@@ -1,6 +1,23 @@
 // 轻量补间动画、棋盘震动与粒子爆裂 —— 解压手感的核心。
 import * as THREE from 'three';
 
+function sparkTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 64;
+  canvas.height = 64;
+  const context = canvas.getContext('2d');
+  const glow = context.createRadialGradient(32, 32, 1, 32, 32, 31);
+  glow.addColorStop(0, 'rgba(255,255,255,1)');
+  glow.addColorStop(0.22, 'rgba(255,255,255,.95)');
+  glow.addColorStop(0.52, 'rgba(255,255,255,.42)');
+  glow.addColorStop(1, 'rgba(255,255,255,0)');
+  context.fillStyle = glow;
+  context.fillRect(0, 0, 64, 64);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
 export const easings = {
   linear: (k) => k,
   easeInQuad: (k) => k * k,
@@ -81,14 +98,17 @@ export class Burst {
     geo.setAttribute('position', new THREE.BufferAttribute(this.pos, 3));
     this.mat = new THREE.PointsMaterial({
       color: 0xffc96b,
-      size: 0.1,
+      size: 0.14,
+      map: sparkTexture(),
       transparent: true,
       opacity: 1,
+      alphaTest: 0.015,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
     });
     this.points = new THREE.Points(geo, this.mat);
     this.points.frustumCulled = false;
+    this.points.renderOrder = 8;
     this.points.visible = false;
     scene.add(this.points);
   }

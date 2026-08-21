@@ -51,6 +51,7 @@ npm run dev    # → http://localhost:5173
 npm test       # 纯逻辑回归测试
 npm run test:balance # 固定种子先后手平衡模拟
 npm run test:browser # 键盘/焦点/设置/动效偏好冒烟
+npm run test:perf # 桌面/移动端 18×18 高密度盘面帧时间预算
 npm run build  # 产物输出到 dist/
 ```
 
@@ -80,7 +81,7 @@ npm run build  # 产物输出到 dist/
 | `src/game.js` | 黑白棋纯规则引擎 + 卡牌池与卡牌效果,无渲染依赖 |
 | `src/run.js` | 无尽关卡成长、战利品与起始手牌规则,无渲染依赖 |
 | `src/ai.js` | 三档落子 AI + 卡牌选牌策略 |
-| `src/scene.js` | 3D 场景:绒布棋盘、瓷质棋子、高亮、幽灵子、视差镜头、动画接口 |
+| `src/scene.js` | 3D 场景:绒布棋盘、实例化棋子/格子、软接触阴影、高亮、视差镜头与动画接口 |
 | `src/fx.js` | 补间动画、棋盘震动、FOV 推冲、粒子爆裂 |
 | `src/audio.js` | Web Audio 实时合成音效(落子/翻面/出牌/护盾/爆破),零素材 |
 | `src/ui.js` | HUD、主页、卡牌手牌栏、终局弹窗 |
@@ -96,5 +97,6 @@ npm run build  # 产物输出到 dist/
 - `test-logic.mjs` — 规则引擎、卡牌效果与三档 AI 的纯逻辑自测
 - `balance-smoke.mjs` — 96 局固定种子 AI 对弈,先手胜率需保持在 35%~65%
 - `interaction-smoke.mjs` — 键盘棋盘、重复卡牌、模态焦点、设置记忆与减少动态效果回归
+- `performance-smoke.mjs` — 桌面/移动端 12×12 与 18×18 高密度盘面的帧时间、draw call 与渲染比例预算
 
 共 18 项像素/动态质检 + 逻辑自测 + 零运行错误,全部通过才算合格。

@@ -159,14 +159,14 @@ export function cellName(r, c) {
 // ---------- 卡牌模式(Buff 变体) ----------
 
 export const CARD_POOL = [
-  { id: 'combo', name: '连击', emoji: '⚡', cost: 3, desc: '立即再落一子;额外回合不抽牌' },
-  { id: 'blast', name: '爆裂', emoji: '💥', cost: 2, desc: '落点周围敌子全翻' },
-  { id: 'lucky', name: '天佑', emoji: '🎲', cost: 2, desc: '随机 2 枚敌子归顺' },
-  { id: 'seed', name: '播种', emoji: '🌱', cost: 1, desc: '相邻空格长出己方棋子' },
-  { id: 'shield', name: '护盾', emoji: '🛡️', cost: 2, desc: '对手下一次翻转无效' },
-  { id: 'bomb', name: '爆破', emoji: '💣', cost: 2, desc: '随机炸飞 2 枚敌子' },
-  { id: 'echo', name: '回响', emoji: '🔁', cost: 1, desc: '重复本步上一张卡的效果(顺序敏感!)' },
-  { id: 'chain', name: '连锁', emoji: '🧨', cost: 2, desc: '随机再翻 3 枚与己方相邻的敌子' },
+  { id: 'combo', name: '连击', emoji: '⚡', icon: 'zap', tone: 'amber', cost: 3, desc: '立即再落一子;额外回合不抽牌' },
+  { id: 'blast', name: '爆裂', emoji: '💥', icon: 'sparkles', tone: 'coral', cost: 2, desc: '落点周围敌子全翻' },
+  { id: 'lucky', name: '天佑', emoji: '🎲', icon: 'dices', tone: 'sky', cost: 2, desc: '随机 2 枚敌子归顺' },
+  { id: 'seed', name: '播种', emoji: '🌱', icon: 'sprout', tone: 'leaf', cost: 1, desc: '相邻空格长出己方棋子' },
+  { id: 'shield', name: '护盾', emoji: '🛡️', icon: 'shield', tone: 'blue', cost: 2, desc: '对手下一次翻转无效' },
+  { id: 'bomb', name: '爆破', emoji: '💣', icon: 'bomb', tone: 'red', cost: 2, desc: '随机炸飞 2 枚敌子' },
+  { id: 'echo', name: '回响', emoji: '🔁', icon: 'repeat-2', tone: 'violet', cost: 1, desc: '重复本步上一张卡的效果(顺序敏感!)' },
+  { id: 'chain', name: '连锁', emoji: '🧨', icon: 'workflow', tone: 'mint', cost: 2, desc: '随机再翻 3 枚与己方相邻的敌子' },
 ];
 export const CARD_META = Object.fromEntries(CARD_POOL.map((c) => [c.id, c]));
 
@@ -191,10 +191,10 @@ export function cardEnergyForTurn(board, player, movesPlayed, firstPlayer = BLAC
 
 // 遗物:肉鸽闯关中整局生效的被动。
 export const RELIC_POOL = [
-  { id: 'crown', name: '王冠', emoji: '👑', desc: '终局计分:你的角子每个额外 +2' },
-  { id: 'hat', name: '手牌大师', emoji: '🎩', desc: '手牌上限 +1' },
-  { id: 'magnet', name: '磁石', emoji: '🧲', desc: '每次落子额外翻 1 枚相邻敌子' },
-  { id: 'clover', name: '幸运草', emoji: '🍀', desc: '每回合补牌时 30% 概率额外多补 1 张' },
+  { id: 'crown', name: '王冠', emoji: '👑', icon: 'crown', tone: 'amber', desc: '终局计分:你的角子每个额外 +2' },
+  { id: 'hat', name: '手牌大师', emoji: '🎩', icon: 'hand', tone: 'violet', desc: '手牌上限 +1' },
+  { id: 'magnet', name: '磁石', emoji: '🧲', icon: 'magnet', tone: 'coral', desc: '每次落子额外翻 1 枚相邻敌子' },
+  { id: 'clover', name: '幸运草', emoji: '🍀', icon: 'clover', tone: 'leaf', desc: '每回合补牌时 30% 概率额外多补 1 张' },
 ];
 export const RELIC_META = Object.fromEntries(RELIC_POOL.map((r) => [r.id, r]));
 

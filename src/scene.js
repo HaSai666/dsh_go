@@ -20,20 +20,124 @@ function cellZ(r) {
   return r - (curSize - 1) / 2;
 }
 
+function seededRandom(seed) {
+  let state = seed >>> 0;
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let value = state;
+    value = Math.imul(value ^ (value >>> 15), value | 1);
+    value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
+    return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// 程序纹理让绒布与木框在不加载外部素材的前提下拥有稳定的微表面细节。
+function makeSurfaceTexture(renderer, { base, noise = 12, weave = false, grain = false, seed = 1 }) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 256;
+  const context = canvas.getContext('2d');
+  const image = context.createImageData(canvas.width, canvas.height);
+  const random = seededRandom(seed);
+  for (let i = 0; i < image.data.length; i += 4) {
+    const variation = (random() - 0.5) * noise;
+    image.data[i] = Math.max(0, Math.min(255, base[0] + variation));
+    image.data[i + 1] = Math.max(0, Math.min(255, base[1] + variation));
+    image.data[i + 2] = Math.max(0, Math.min(255, base[2] + variation));
+    image.data[i + 3] = 255;
+  }
+  context.putImageData(image, 0, 0);
+
+  if (weave) {
+    context.globalCompositeOperation = 'soft-light';
+    for (let p = 1; p < 256; p += 4) {
+      context.strokeStyle = p % 8 ? 'rgba(255,255,255,.12)' : 'rgba(0,0,0,.14)';
+      context.beginPath();
+      context.moveTo(p, 0);
+      context.lineTo(p, 256);
+      context.stroke();
+      context.beginPath();
+      context.moveTo(0, p + 1);
+      context.lineTo(256, p + 1);
+      context.stroke();
+    }
+  }
+
+  if (grain) {
+    context.globalCompositeOperation = 'screen';
+    for (let i = 0; i < 52; i++) {
+      const y = random() * 256;
+      context.strokeStyle = `rgba(190,150,108,${0.025 + random() * 0.045})`;
+      context.lineWidth = 0.5 + random() * 1.2;
+      context.beginPath();
+      context.moveTo(0, y);
+      context.bezierCurveTo(64, y + random() * 9 - 4.5, 192, y + random() * 9 - 4.5, 256, y);
+      context.stroke();
+    }
+  }
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+  return texture;
+}
+
+function makeContactShadowTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 64;
+  canvas.height = 64;
+  const context = canvas.getContext('2d');
+  const gradient = context.createRadialGradient(32, 32, 3, 32, 32, 31);
+  gradient.addColorStop(0, 'rgba(255,255,255,.92)');
+  gradient.addColorStop(0.62, 'rgba(255,255,255,.52)');
+  gradient.addColorStop(1, 'rgba(255,255,255,0)');
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, 64, 64);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.generateMipmaps = false;
+  return texture;
+}
+
+function makeBoardShadowTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 256;
+  const context = canvas.getContext('2d');
+  context.filter = 'blur(14px)';
+  context.fillStyle = 'rgba(255,255,255,.82)';
+  context.fillRect(24, 24, 208, 208);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.generateMipmaps = false;
+  return texture;
+}
+
 export function buildScene(container) {
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-  const renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  const memoryConstrained = (navigator.deviceMemory || 8) <= 4;
+  const isCompactViewport = () => Math.min(window.innerWidth, window.innerHeight) < 700;
+  const pixelRatioCap = (size) => {
+    if (size >= 16) return 1;
+    return isCompactViewport() && !memoryConstrained ? 1.2 : 1;
+  };
+  const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, pixelRatioCap(SIZE)));
   renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.enabled = false;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.12;
+  renderer.toneMappingExposure = 1.04;
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
   container.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x191410);
-  scene.fog = new THREE.Fog(0x191410, 20, 55);
+  scene.background = new THREE.Color(0x070a09);
+  scene.fog = new THREE.Fog(0x070a09, 20, 56);
 
   const camera = new THREE.PerspectiveCamera(
     35, // 12×12 大棋盘:视角收窄 + 相机距离拉远,整盘尽收眼底
@@ -54,16 +158,17 @@ export function buildScene(container) {
   controls.minPolarAngle = 0.3;
   controls.maxPolarAngle = 1.22;
 
-  // 室内环境贴图:给瓷质棋子的 clearcoat 提供真实反光。
+  // 室内环境贴图:给釉面棋子和外框提供稳定反光。
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 
-  // 灯光:半球环境光 + 暖色主光(投影) + 冷色轮廓光。
-  scene.add(new THREE.HemisphereLight(0xfff2dd, 0x33251a, 0.75));
-  const sun = new THREE.DirectionalLight(0xffe3bb, 2.4);
-  sun.position.set(4, 5.5, 5);
+  // 暖色主光塑造棋子体积,冷色轮廓光把黑棋从暗场中分离出来。
+  scene.add(new THREE.HemisphereLight(0xf4ecdc, 0x07110d, 0.58));
+  const sun = new THREE.DirectionalLight(0xffdfb2, 2.75);
+  sun.position.set(5.5, 7.5, 6.5);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
+  const shadowSize = 1024;
+  sun.shadow.mapSize.set(shadowSize, shadowSize);
   sun.shadow.camera.left = -9;
   sun.shadow.camera.right = 9;
   sun.shadow.camera.top = 9;
@@ -73,9 +178,16 @@ export function buildScene(container) {
   sun.shadow.bias = -0.0006;
   sun.shadow.normalBias = 0.015;
   scene.add(sun);
-  const rim = new THREE.DirectionalLight(0x8fa3d8, 0.7);
-  rim.position.set(-8, 6, -8);
+
+  function applyRenderQuality(size) {
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, pixelRatioCap(size)));
+  }
+  const rim = new THREE.DirectionalLight(0x78b7c2, 1.15);
+  rim.position.set(-7, 5, -8);
   scene.add(rim);
+  const fill = new THREE.DirectionalLight(0x7bc49c, 0.36);
+  fill.position.set(-3, 4, 7);
+  scene.add(fill);
 
   const boardGroup = new THREE.Group();
   scene.add(boardGroup);
@@ -84,26 +196,74 @@ export function buildScene(container) {
   boardGroup.add(baseGroup);
   boardGroup.add(pieceGroup);
 
-  // 大桌面:接阴影,让棋盘有"摆在家具上"的感觉。
+  const tableTexture = makeSurfaceTexture(renderer, {
+    base: [24, 34, 29],
+    noise: 10,
+    weave: true,
+    seed: 31,
+  });
+  tableTexture.repeat.set(24, 24);
+  const feltTexture = makeSurfaceTexture(renderer, {
+    base: [44, 124, 88],
+    noise: 15,
+    weave: true,
+    seed: 73,
+  });
+  feltTexture.repeat.set(1.4, 1.4);
+  const woodTexture = makeSurfaceTexture(renderer, {
+    base: [30, 27, 23],
+    noise: 14,
+    grain: true,
+    seed: 109,
+  });
+  woodTexture.repeat.set(3.2, 1);
+  const contactShadowTexture = makeContactShadowTexture();
+  const boardShadowTexture = makeBoardShadowTexture();
+
+  // 暗色赛台接住棋盘投影,材质细节只在光线掠过时显现。
   const table = new THREE.Mesh(
     new THREE.PlaneGeometry(80, 80),
-    new THREE.MeshStandardMaterial({ color: 0x241a12, roughness: 0.95 })
+    new THREE.MeshLambertMaterial({
+      color: 0x7d8a83,
+      map: tableTexture,
+    })
   );
   table.rotation.x = -Math.PI / 2;
   table.position.y = -0.22;
   table.receiveShadow = true;
   scene.add(table);
 
-  // 胡桃木外框材质(共享)。
-  const frameMat = new THREE.MeshStandardMaterial({
-    color: 0x3a2718,
-    roughness: 0.55,
-    metalness: 0.05,
+  const frameMat = new THREE.MeshPhysicalMaterial({
+    color: 0xb5afa5,
+    map: woodTexture,
+    roughness: 0.34,
+    metalness: 0.08,
+    clearcoat: 0.46,
+    clearcoatRoughness: 0.32,
   });
+  const railMat = new THREE.MeshStandardMaterial({
+    color: 0xc59246,
+    roughness: 0.32,
+    metalness: 0.78,
+  });
+  const skirtMat = new THREE.MeshStandardMaterial({
+    color: 0x0a0d0c,
+    roughness: 0.58,
+    metalness: 0.2,
+  });
+  const boardShadowMat = new THREE.MeshBasicMaterial({
+    color: 0x000000,
+    map: boardShadowTexture,
+    transparent: true,
+    opacity: 0.5,
+    depthWrite: false,
+  });
+  const sharedBaseMaterials = new Set([frameMat, railMat, skirtMat, boardShadowMat]);
 
   // 按尺寸重建棋盘底座(外框 4 墙 + 绒布底板 + size² 个格子)。
   // 外框绝不能用实心盒子:实心盒子的顶面会与棋盘面板完全共面,导致整盘 z-fighting 频闪。
-  let cells = [];
+  let cellMesh = null;
+  let boardShadow = null;
   let cellGeo = null;
 
   function buildBase(size) {
@@ -112,20 +272,21 @@ export function buildScene(container) {
     for (const child of [...baseGroup.children]) {
       baseGroup.remove(child);
       if (child.geometry) oldGeometries.add(child.geometry);
-      if (child.material && child.material !== frameMat) child.material.dispose();
+      if (child.material && !sharedBaseMaterials.has(child.material)) child.material.dispose();
     }
     for (const geometry of oldGeometries) geometry.dispose();
-    cells = [];
-    cellGeo = new THREE.PlaneGeometry(0.92, 0.92);
+    cellMesh = null;
+    boardShadow = null;
+    cellGeo = new THREE.BoxGeometry(0.935, 0.045, 0.935);
 
     // 四块实木墙拼成真正的框
-    const frameOuter = size + 1.4;
-    const wallW = 0.45;
-    const wallH = 0.62;
-    const wallY = 0.01; // 顶面 0.32,高于格面 0.215,形成围边
+    const frameOuter = size + 1.5;
+    const wallW = 0.5;
+    const wallH = 0.58;
+    const wallY = -0.02;
     const wallCenter = (frameOuter - wallW) / 2;
-    const wallLong = new THREE.BoxGeometry(frameOuter, wallH, wallW);
-    const wallShort = new THREE.BoxGeometry(wallW, wallH, frameOuter - 2 * wallW);
+    const wallLong = new RoundedBoxGeometry(frameOuter, wallH, wallW, 3, 0.055);
+    const wallShort = new RoundedBoxGeometry(wallW, wallH, frameOuter - 2 * wallW, 3, 0.055);
     for (const [x, z, geo] of [
       [0, wallCenter, wallLong],
       [0, -wallCenter, wallLong],
@@ -139,34 +300,77 @@ export function buildScene(container) {
       baseGroup.add(wall);
     }
 
+    // 内圈金属嵌条压住深色木框,也是视觉上判断棋盘边界的高光线。
+    const railOffset = size / 2 + 0.2;
+    const railY = 0.282;
+    const railH = 0.026;
+    const railW = 0.045;
+    const railLong = new THREE.BoxGeometry(size + 0.44, railH, railW);
+    const railShort = new THREE.BoxGeometry(railW, railH, size + 0.44);
+    for (const [x, z, geo] of [
+      [0, railOffset, railLong],
+      [0, -railOffset, railLong],
+      [railOffset, 0, railShort],
+      [-railOffset, 0, railShort],
+    ]) {
+      const rail = new THREE.Mesh(geo, railMat);
+      rail.position.set(x, railY, z);
+      rail.castShadow = true;
+      baseGroup.add(rail);
+    }
+
+    const skirt = new THREE.Mesh(
+      new RoundedBoxGeometry(size + 0.82, 0.14, size + 0.82, 3, 0.06),
+      skirtMat
+    );
+    skirt.position.y = -0.23;
+    skirt.castShadow = true;
+    skirt.receiveShadow = true;
+    baseGroup.add(skirt);
+
+    boardShadow = new THREE.Mesh(
+      new THREE.PlaneGeometry(size + 1.65, size + 1.65),
+      boardShadowMat
+    );
+    boardShadow.rotation.x = -Math.PI / 2;
+    boardShadow.position.set(0.16, -0.211, 0.18);
+    boardShadow.renderOrder = -1;
+    baseGroup.add(boardShadow);
+
     // 绒布底板:下沉 0.145,格子像浮雕一样浮在底板上
     const slab = new THREE.Mesh(
-      new RoundedBoxGeometry(size + 0.35, 0.26, size + 0.35, 4, 0.1),
-      new THREE.MeshStandardMaterial({ color: 0x1f4433, roughness: 0.92 })
+      new RoundedBoxGeometry(size + 0.35, 0.26, size + 0.35, 4, 0.08),
+      new THREE.MeshLambertMaterial({
+        color: 0xd2e4d7,
+        map: feltTexture,
+      })
     );
-    slab.position.y = -0.06;
+    slab.position.y = 0.065;
     slab.receiveShadow = true;
     baseGroup.add(slab);
 
-    // size² 个格子:双绿交替成网格,每格独立材质以便单独高亮。
+    // 格子合并为一次实例化绘制。颜色仍交替,但 18×18 时不再产生 324 次 draw call。
+    const cellMaterial = new THREE.MeshLambertMaterial({
+      color: 0xffffff,
+      map: feltTexture,
+    });
+    cellMesh = new THREE.InstancedMesh(cellGeo, cellMaterial, size * size);
+    const cellMatrix = new THREE.Matrix4();
+    const darkCell = new THREE.Color(0xc1ddcb);
+    const lightCell = new THREE.Color(0xd4e8da);
     for (let r = 0; r < size; r++) {
       for (let c = 0; c < size; c++) {
-        const m = new THREE.Mesh(
-          cellGeo,
-          new THREE.MeshStandardMaterial({
-            color: (r + c) % 2 ? 0x2f6349 : 0x28553e,
-            roughness: 0.95,
-            emissive: 0x000000,
-          })
-        );
-        m.rotation.x = -Math.PI / 2;
-        m.position.set(cellX(c), CELL_Y, cellZ(r));
-        m.receiveShadow = true;
-        m.userData = { r, c };
-        baseGroup.add(m);
-        cells.push(m);
+        const index = r * size + c;
+        cellMatrix.makeTranslation(cellX(c), CELL_Y - 0.0225, cellZ(r));
+        cellMesh.setMatrixAt(index, cellMatrix);
+        cellMesh.setColorAt(index, (r + c) % 2 ? lightCell : darkCell);
       }
     }
+    cellMesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+    cellMesh.instanceMatrix.needsUpdate = true;
+    cellMesh.instanceColor.needsUpdate = true;
+    cellMesh.receiveShadow = true;
+    baseGroup.add(cellMesh);
   }
 
   // 相机自适应:棋盘(含外框)容纳进屏幕较窄维度;并用"近端边角"约束补偿透视放大,
@@ -212,55 +416,122 @@ export function buildScene(container) {
       new THREE.Vector2(0.2, 0.24),
       new THREE.Vector2(0.002, 0.28),
     ],
-    40
+    20
   );
 
   // 瓷质黑白双色材质 + 半透明幽灵材质。
   const mats = {
-    [BLACK]: new THREE.MeshPhysicalMaterial({
-      color: 0x050509,
-      roughness: 0.55,
-      clearcoat: 0.12,
-      clearcoatRoughness: 0.45,
-      envMapIntensity: 0.35,
+    [BLACK]: new THREE.MeshPhongMaterial({
+      color: 0x050807,
+      specular: 0x55615d,
+      shininess: 38,
     }),
-    [WHITE]: new THREE.MeshPhysicalMaterial({
-      color: 0xf4efe2,
-      roughness: 0.2,
-      clearcoat: 0.8,
-      clearcoatRoughness: 0.15,
+    [WHITE]: new THREE.MeshPhongMaterial({
+      color: 0xf4eedf,
+      specular: 0xffffff,
+      shininess: 68,
     }),
   };
   const ghostMats = {
-    [BLACK]: new THREE.MeshPhysicalMaterial({
-      color: 0x16161c,
-      roughness: 0.3,
+    [BLACK]: new THREE.MeshPhongMaterial({
+      color: 0x101719,
+      specular: 0x34413c,
+      shininess: 34,
       transparent: true,
-      opacity: 0.45,
+      opacity: 0.52,
       depthWrite: false,
     }),
-    [WHITE]: new THREE.MeshPhysicalMaterial({
+    [WHITE]: new THREE.MeshPhongMaterial({
       color: 0xf4efe2,
-      roughness: 0.3,
+      specular: 0xffffff,
+      shininess: 52,
       transparent: true,
-      opacity: 0.45,
+      opacity: 0.52,
       depthWrite: false,
     }),
   };
 
+  // 静止棋子按颜色合并为两次实例化绘制。正在坠落/翻转的棋子临时切回独立网格,
+  // 动画结束后立即并回实例组,兼顾逐子动画与 18×18 后期盘面的帧率。
+  const pieceInstances = {
+    [BLACK]: new THREE.InstancedMesh(pieceGeo, mats[BLACK], 18 * 18),
+    [WHITE]: new THREE.InstancedMesh(pieceGeo, mats[WHITE], 18 * 18),
+  };
+  for (const instances of Object.values(pieceInstances)) {
+    instances.count = 0;
+    instances.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    instances.castShadow = true;
+    instances.frustumCulled = false;
+    pieceGroup.add(instances);
+  }
+  const contactShadowGeo = new THREE.CircleGeometry(0.52, 16);
+  contactShadowGeo.rotateX(-Math.PI / 2);
+  const contactShadows = new THREE.InstancedMesh(
+    contactShadowGeo,
+    new THREE.MeshBasicMaterial({
+      color: 0x000000,
+      map: contactShadowTexture,
+      transparent: true,
+      opacity: 0.72,
+      depthWrite: false,
+    }),
+    18 * 18
+  );
+  contactShadows.count = 0;
+  contactShadows.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  contactShadows.frustumCulled = false;
+  contactShadows.renderOrder = 1;
+  pieceGroup.add(contactShadows);
+  const pieceMatrix = new THREE.Matrix4();
+  const shadowMatrix = new THREE.Matrix4();
   const pieces = [];
   const pieceByCell = new Map();
+
+  function rebuildPieceInstances() {
+    const counts = { [BLACK]: 0, [WHITE]: 0 };
+    let shadowCount = 0;
+    for (const piece of pieces) {
+      if (!piece.active) continue;
+      shadowMatrix.makeTranslation(cellX(piece.c) + 0.075, CELL_Y + 0.007, cellZ(piece.r) + 0.1);
+      contactShadows.setMatrixAt(shadowCount++, shadowMatrix);
+      if (piece.animationRefs > 0) continue;
+      const index = counts[piece.color]++;
+      pieceMatrix.makeTranslation(cellX(piece.c), PIECE_Y, cellZ(piece.r));
+      pieceInstances[piece.color].setMatrixAt(index, pieceMatrix);
+    }
+    for (const color of [BLACK, WHITE]) {
+      pieceInstances[color].count = counts[color];
+      pieceInstances[color].instanceMatrix.needsUpdate = true;
+    }
+    contactShadows.count = shadowCount;
+    contactShadows.instanceMatrix.needsUpdate = true;
+  }
+
+  function beginPieceAnimation(piece) {
+    piece.animationRefs++;
+    if (piece.animationRefs > 1) return;
+    piece.mesh.visible = true;
+    piece.mesh.position.set(cellX(piece.c), PIECE_Y, cellZ(piece.r));
+    rebuildPieceInstances();
+  }
+
+  function endPieceAnimation(piece) {
+    piece.animationRefs = Math.max(0, piece.animationRefs - 1);
+    if (piece.animationRefs > 0) return;
+    piece.mesh.visible = false;
+    rebuildPieceInstances();
+  }
 
   function ensurePiece(r, c) {
     const key = r * curSize + c;
     let piece = pieceByCell.get(key);
     if (!piece) {
       const mesh = new THREE.Mesh(pieceGeo, mats[BLACK]);
-      mesh.castShadow = true;
+      mesh.castShadow = false;
       mesh.position.set(cellX(c), PIECE_Y, cellZ(r));
       mesh.visible = false;
       pieceGroup.add(mesh);
-      piece = { mesh, r, c, color: EMPTY };
+      piece = { mesh, r, c, color: EMPTY, active: false, animationRefs: 0 };
       pieceByCell.set(key, piece);
       pieces.push(piece);
     }
@@ -279,19 +550,53 @@ export function buildScene(container) {
   ghost.receiveShadow = false;
   pieceGroup.add(ghost);
 
-  // 最后落子标记:悬浮在棋子顶部的琥珀色光晕(原先的环会被棋子盖住)。
-  const lastMarker = new THREE.Mesh(
-    new THREE.RingGeometry(0.15, 0.21, 32),
+  const legalMarkerGeo = new THREE.RingGeometry(0.11, 0.15, 16);
+  legalMarkerGeo.rotateX(-Math.PI / 2);
+  const legalMarkerMat = new THREE.MeshBasicMaterial({
+    color: 0xe4b861,
+    transparent: true,
+    opacity: 0.74,
+    depthWrite: false,
+  });
+  const legalMarkers = new THREE.InstancedMesh(legalMarkerGeo, legalMarkerMat, 18 * 18);
+  const legalMarkerMatrix = new THREE.Matrix4();
+  const legalFillMatrix = new THREE.Matrix4();
+  legalMarkers.count = 0;
+  legalMarkers.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  legalMarkers.frustumCulled = false;
+  legalMarkers.renderOrder = 3;
+  pieceGroup.add(legalMarkers);
+  const legalFillGeo = new THREE.CircleGeometry(0.19, 16);
+  legalFillGeo.rotateX(-Math.PI / 2);
+  const legalFills = new THREE.InstancedMesh(
+    legalFillGeo,
     new THREE.MeshBasicMaterial({
-      color: 0xffc94d,
+      color: 0x45c882,
       transparent: true,
-      opacity: 0.75,
+      opacity: 0.2,
+      depthWrite: false,
+    }),
+    18 * 18
+  );
+  legalFills.count = 0;
+  legalFills.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  legalFills.frustumCulled = false;
+  legalFills.renderOrder = 2;
+  pieceGroup.add(legalFills);
+
+  // 最后落子标记:棋子顶部的细金属光环。
+  const lastMarker = new THREE.Mesh(
+    new THREE.TorusGeometry(0.175, 0.022, 8, 32),
+    new THREE.MeshBasicMaterial({
+      color: 0xffd278,
+      transparent: true,
+      opacity: 0.9,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
     })
   );
   lastMarker.rotation.x = -Math.PI / 2;
-  lastMarker.position.y = CELL_Y + 0.42;
+  lastMarker.position.y = CELL_Y + 0.395;
   lastMarker.visible = false;
   pieceGroup.add(lastMarker);
 
@@ -311,29 +616,43 @@ export function buildScene(container) {
   impactRing.visible = false;
   pieceGroup.add(impactRing);
 
+  const impactGlow = new THREE.Mesh(
+    new THREE.CircleGeometry(0.28, 40),
+    new THREE.MeshBasicMaterial({
+      color: 0xf0b84e,
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    })
+  );
+  impactGlow.rotation.x = -Math.PI / 2;
+  impactGlow.position.y = CELL_Y + 0.018;
+  impactGlow.visible = false;
+  pieceGroup.add(impactGlow);
+
   const tweens = new Tweens();
   const burst = new Burst(scene, () => reduceMotion.matches);
   const raycaster = new THREE.Raycaster();
 
   // ---- 高亮管理 ----
-  const legalSet = new Set();
-
   function setLegal(moves) {
     clearLegal();
-    for (const [r, c] of moves) {
-      const m = cells[r * curSize + c];
-      m.material.emissive.setHex(0x46d98a);
-      m.material.emissiveIntensity = 0.5;
-      legalSet.add(m);
-    }
+    moves.forEach(([r, c], index) => {
+      legalMarkerMatrix.makeTranslation(cellX(c), CELL_Y + 0.012, cellZ(r));
+      legalFillMatrix.makeTranslation(cellX(c), CELL_Y + 0.008, cellZ(r));
+      legalMarkers.setMatrixAt(index, legalMarkerMatrix);
+      legalFills.setMatrixAt(index, legalFillMatrix);
+    });
+    legalMarkers.count = moves.length;
+    legalFills.count = moves.length;
+    legalMarkers.instanceMatrix.needsUpdate = true;
+    legalFills.instanceMatrix.needsUpdate = true;
   }
 
   function clearLegal() {
-    for (const m of legalSet) {
-      m.material.emissive.setHex(0x000000);
-      m.material.emissiveIntensity = 1;
-    }
-    legalSet.clear();
+    legalMarkers.count = 0;
+    legalFills.count = 0;
     ghost.visible = false;
   }
 
@@ -352,7 +671,8 @@ export function buildScene(container) {
   function placePiece(r, c, color) {
     const piece = ensurePiece(r, c);
     setPieceColor(piece, color);
-    piece.mesh.visible = true;
+    piece.active = true;
+    beginPieceAnimation(piece);
     piece.mesh.position.y = PIECE_Y + 2.8;
     piece.mesh.scale.set(1, 1, 1);
     return piece;
@@ -363,6 +683,7 @@ export function buildScene(container) {
   function dropPiece(piece) {
     if (reduceMotion.matches) {
       piece.mesh.position.y = PIECE_Y;
+      endPieceAnimation(piece);
       return Promise.resolve();
     }
     const ts = window.__QA_SLOWMO || 1;
@@ -375,6 +696,7 @@ export function buildScene(container) {
         },
         done: () => {
           piece.mesh.position.y = PIECE_Y;
+          endPieceAnimation(piece);
           resolve();
         },
       });
@@ -391,7 +713,9 @@ export function buildScene(container) {
         const cc = c + dc;
         if (rr < 0 || rr >= curSize || cc < 0 || cc >= curSize) continue;
         const piece = pieceByCell.get(rr * curSize + cc);
-        if (!piece || !piece.mesh.visible) continue;
+        if (!piece || !piece.active) continue;
+        if (piece.bouncing) continue;
+        beginPieceAnimation(piece);
         const base = piece.mesh.position.y;
         piece.bouncing = true;
         tweens.add({
@@ -404,6 +728,7 @@ export function buildScene(container) {
             piece.mesh.scale.y = 1;
             piece.mesh.position.y = base;
             piece.bouncing = false;
+            endPieceAnimation(piece);
           },
         });
       }
@@ -418,8 +743,10 @@ export function buildScene(container) {
       piece.mesh.position.y = PIECE_Y;
       piece.mesh.scale.set(1, 1, 1);
       setPieceColor(piece, color);
+      rebuildPieceInstances();
       return Promise.resolve();
     }
+    beginPieceAnimation(piece);
     return new Promise((resolve) => {
       const axis = new THREE.Vector3(axisX, 0, axisZ).normalize();
       let swapped = false;
@@ -443,6 +770,7 @@ export function buildScene(container) {
           piece.mesh.position.y = PIECE_Y;
           piece.mesh.scale.set(1, 1, 1);
           setPieceColor(piece, color);
+          endPieceAnimation(piece);
           resolve();
         },
       });
@@ -461,23 +789,35 @@ export function buildScene(container) {
   function impactAt(r, c, color = 0xf0b84e) {
     if (reduceMotion.matches) {
       impactRing.visible = false;
+      impactGlow.visible = false;
       return;
     }
+    const x = cellX(c);
+    const z = cellZ(r);
     impactRing.visible = true;
+    impactGlow.visible = true;
     impactRing.material.color.setHex(color);
+    impactGlow.material.color.setHex(color);
     impactRing.material.opacity = 0.95;
-    impactRing.position.set(cellX(c), CELL_Y + 0.035, cellZ(r));
+    impactGlow.material.opacity = 0.34;
+    impactRing.position.set(x, CELL_Y + 0.035, z);
+    impactGlow.position.set(x, CELL_Y + 0.018, z);
     impactRing.scale.setScalar(0.7);
+    impactGlow.scale.setScalar(0.8);
     tweens.add({
-      dur: 0.48,
+      dur: 0.52,
       ease: easings.easeOutCubic,
       update: (e) => {
-        impactRing.scale.setScalar(0.7 + e * 2.5);
+        impactRing.scale.setScalar(0.7 + e * 2.85);
+        impactGlow.scale.setScalar(0.8 + e * 1.35);
         impactRing.material.opacity = 0.95 * (1 - e);
+        impactGlow.material.opacity = 0.34 * (1 - e) * (1 - e);
       },
       done: () => {
         impactRing.visible = false;
+        impactGlow.visible = false;
         impactRing.material.opacity = 0;
+        impactGlow.material.opacity = 0;
       },
     });
   }
@@ -485,9 +825,12 @@ export function buildScene(container) {
   // 爆破卡:棋子被炸飞(放大+上升后消失)。
   function popPiece(piece) {
     if (reduceMotion.matches) {
+      piece.active = false;
       piece.mesh.visible = false;
+      rebuildPieceInstances();
       return Promise.resolve();
     }
+    beginPieceAnimation(piece);
     return new Promise((resolve) => {
       tweens.add({
         dur: 0.28,
@@ -496,9 +839,11 @@ export function buildScene(container) {
           piece.mesh.position.y = PIECE_Y + 0.6 * e;
         },
         done: () => {
+          piece.active = false;
           piece.mesh.visible = false;
           piece.mesh.scale.set(1, 1, 1);
           piece.mesh.position.y = PIECE_Y;
+          endPieceAnimation(piece);
           resolve();
         },
       });
@@ -509,23 +854,27 @@ export function buildScene(container) {
   function syncBoard(board) {
     tweens.clear(true);
     clearLegal();
+    for (const piece of pieces) {
+      piece.active = false;
+      piece.animationRefs = 0;
+      piece.bouncing = false;
+      piece.mesh.visible = false;
+    }
     const n = board.length;
     for (let r = 0; r < n; r++) {
       for (let c = 0; c < n; c++) {
         const v = board[r][c];
-        if (v === EMPTY) {
-          const existing = pieceByCell.get(r * curSize + c);
-          if (existing) existing.mesh.visible = false;
-          continue;
-        }
+        if (v === EMPTY) continue;
         const piece = ensurePiece(r, c);
-        piece.mesh.visible = true;
+        piece.active = true;
+        piece.mesh.visible = false;
         piece.mesh.position.set(cellX(c), PIECE_Y, cellZ(r));
         piece.mesh.scale.set(1, 1, 1);
         piece.mesh.quaternion.identity();
         setPieceColor(piece, v);
       }
     }
+    rebuildPieceInstances();
   }
 
   // 清空全部棋子(棋盘尺寸变化时用)。
@@ -535,11 +884,15 @@ export function buildScene(container) {
     }
     pieces.length = 0;
     pieceByCell.clear();
+    pieceInstances[BLACK].count = 0;
+    pieceInstances[WHITE].count = 0;
+    contactShadows.count = 0;
   }
 
   // 无尽模式:随关卡重建棋盘并适配相机与阴影范围。
   function resizeBoard(size) {
     curSize = size;
+    applyRenderQuality(size);
     buildBase(size);
     clearPieces();
     clearLegal();
@@ -560,8 +913,10 @@ export function buildScene(container) {
       -((event.clientY - rect.top) / rect.height) * 2 + 1
     );
     raycaster.setFromCamera(ndc, camera);
-    const hits = raycaster.intersectObjects(cells, false);
-    return hits.length ? hits[0].object.userData : null;
+    const hits = cellMesh ? raycaster.intersectObject(cellMesh, false) : [];
+    if (!hits.length || hits[0].instanceId === undefined) return null;
+    const index = hits[0].instanceId;
+    return { r: Math.floor(index / curSize), c: index % curSize };
   }
 
   // 落子"推冲":FOV 快速鼓一下再收回,配合拍击给镜头一个力量感。
@@ -586,14 +941,15 @@ export function buildScene(container) {
     // 静态画面下除了补间/粒子外不做任何周期性变化,从根源上杜绝频闪。
     tweens.update(dt);
     burst.update(dt);
-    // 主页氛围:空棋盘缓缓自转;进入游戏后平滑归零。
+    // 主页只做小幅摆动,持续保留正面构图;进入游戏后平滑归零。
     if (reduceMotion.matches) {
       boardGroup.rotation.y = 0;
       controls.enableDamping = false;
       controls.target.set(0, 0.1, 0);
     } else if (idleMode) {
       controls.enableDamping = true;
-      boardGroup.rotation.y += dt * 0.2;
+      const targetRotation = -0.035 + Math.sin(time * 0.32) * 0.055;
+      boardGroup.rotation.y += (targetRotation - boardGroup.rotation.y) * Math.min(1, dt * 1.7);
     } else if (boardGroup.rotation.y !== 0) {
       controls.enableDamping = true;
       boardGroup.rotation.y *= Math.max(0, 1 - dt * 3);
@@ -607,6 +963,8 @@ export function buildScene(container) {
       controls.target.x += (mouseNdc.x * 0.55 - controls.target.x) * k;
       controls.target.y += (0.1 - mouseNdc.y * 0.3 - controls.target.y) * k;
     }
+    contactShadows.visible = sun.castShadow;
+    if (boardShadow) boardShadow.visible = sun.castShadow;
     controls.update();
     renderer.render(scene, camera);
   }
@@ -614,6 +972,7 @@ export function buildScene(container) {
   function resize() {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
+    applyRenderQuality(curSize);
     renderer.setSize(window.innerWidth, window.innerHeight);
     fitCamera(curSize); // 旋转屏幕/改变窗口后重新构图
   }

@@ -1,25 +1,84 @@
 // HUD:比分、回合指示、难度选择、悔棋/重开/静音/主页、提示条与终局弹窗;
 // 管理主页(模式选择)、卡牌手牌栏(悬浮介绍 + 触发顺序队列)、肉鸽关卡栏与战利品面板。
 import { CARD_META, RELIC_META } from './game.js';
+import {
+  createIcons,
+  ArrowRight,
+  Bomb,
+  Clover,
+  Crown,
+  Dices,
+  Hand,
+  House,
+  Layers3,
+  Magnet,
+  Repeat2,
+  RotateCcw,
+  Shield,
+  Sparkles,
+  Sprout,
+  Undo2,
+  Volume2,
+  VolumeX,
+  Workflow,
+  Zap,
+} from 'lucide';
 
 const ORDER_MARKS = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧'];
+const UI_ICONS = {
+  ArrowRight,
+  Bomb,
+  Clover,
+  Crown,
+  Dices,
+  Hand,
+  House,
+  Layers3,
+  Magnet,
+  Repeat2,
+  RotateCcw,
+  Shield,
+  Sparkles,
+  Sprout,
+  Undo2,
+  Volume2,
+  VolumeX,
+  Workflow,
+  Zap,
+};
+
+function refreshIcons() {
+  createIcons({
+    icons: UI_ICONS,
+    attrs: {
+      'aria-hidden': 'true',
+      'stroke-width': 1.8,
+    },
+  });
+  document.querySelectorAll('svg[data-lucide]').forEach((icon) => {
+    icon.removeAttribute('data-lucide');
+  });
+}
 
 export class UI {
   constructor() {
     this.el = document.getElementById('hud');
     this.el.innerHTML = `
       <div class="panel top-left">
-        <div>黑白棋<span class="sub">3D 解压版</span></div>
+        <div class="brand-lockup">
+          <span class="brand-lockup-mark" aria-hidden="true"><i></i><i></i></span>
+          <span class="brand-lockup-copy"><b>黑白棋</b><span class="sub">3D 解压版</span></span>
+        </div>
         <div id="runbar" class="runbar hidden"></div>
         <div id="statusbar" class="statusbar hidden"></div>
       </div>
       <div class="panel top-center scoreboard">
         <div class="score black" id="score-black" aria-label="黑棋 2 子">
-          <span class="disc black" aria-hidden="true"></span><b id="num-black">2</b>
+          <span class="player-label">你</span><span class="disc black" aria-hidden="true"></span><b id="num-black">2</b>
         </div>
         <div class="turnbox" role="status" aria-live="polite"><span id="turn-text">你的回合</span></div>
         <div class="score white" id="score-white" aria-label="白棋 2 子">
-          <b id="num-white">2</b><span class="disc white" aria-hidden="true"></span>
+          <b id="num-white">2</b><span class="disc white" aria-hidden="true"></span><span class="player-label">电脑</span>
         </div>
       </div>
       <div class="panel top-right controls">
@@ -29,27 +88,30 @@ export class UI {
           <option value="normal" selected>普通</option>
           <option value="hard">困难</option>
         </select>
-        <button id="btn-undo" type="button" title="悔棋 (U)">悔棋</button>
-        <button id="btn-restart" type="button" title="重新开始 (R)">重开</button>
-        <button id="btn-mute" type="button" title="音效 (M)" aria-label="静音" aria-pressed="false">🔊</button>
-        <button id="btn-home" type="button" title="返回主页">主页</button>
+        <button id="btn-undo" class="tool-button" type="button" title="悔棋 (U)"><i data-lucide="undo-2"></i><span>悔棋</span></button>
+        <button id="btn-restart" class="tool-button" type="button" title="重新开始 (R)"><i data-lucide="rotate-ccw"></i><span>重开</span></button>
+        <button id="btn-mute" class="tool-button" type="button" title="音效 (M)" aria-label="静音" aria-pressed="false"><i data-lucide="volume-2"></i><span>音效</span></button>
+        <button id="btn-home" class="tool-button" type="button" title="返回主页"><i data-lucide="house"></i><span>主页</span></button>
       </div>
       <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
       <div id="move-feedback" class="move-feedback" role="status" aria-live="polite" aria-atomic="true">
         <b id="move-grade"></b><span id="move-detail"></span>
       </div>
       <div id="cardbar" class="cardbar hidden">
-        <div id="cardbar-label" class="cardbar-label"></div>
-        <div id="card-energy" class="card-energy" role="progressbar" aria-label="行动力"></div>
+        <div class="cardbar-head">
+          <div id="cardbar-label" class="cardbar-label"></div>
+          <div id="card-energy" class="card-energy" role="progressbar" aria-label="行动力"></div>
+        </div>
         <div id="cardbar-cards" class="cardbar-cards"></div>
       </div>
       <div id="tooltip" class="tooltip hidden" role="tooltip"></div>
       <div id="hint" class="hint">点击发光格子落子 · 拖拽旋转视角 · 滚轮缩放 · R 重开 / U 悔棋 / M 静音</div>
       <div id="game-instructions" class="sr-only">棋盘获得焦点后,使用方向键切换合法落点,按 Enter 或空格落子。</div>
       <div id="board-status" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
-      <div id="rotate-hint" class="rotate-hint" aria-hidden="true">🔄 横屏体验更佳</div>
+      <div id="rotate-hint" class="rotate-hint" aria-hidden="true">横屏体验更佳</div>
       <div id="overlay" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="over-title" aria-describedby="over-sub" hidden>
         <div class="overlay-card">
+          <div class="overlay-kicker">对局结算</div>
           <div id="over-title" class="over-title">你赢了!</div>
           <div id="over-score" class="over-score">33 : 31</div>
           <div id="over-sub" class="over-sub">漂亮!再下一局?</div>
@@ -58,6 +120,7 @@ export class UI {
       </div>
       <div id="reward" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="reward-title" aria-describedby="reward-sub" hidden>
         <div class="overlay-card">
+          <div class="overlay-kicker">关卡战利品</div>
           <div id="reward-title" class="over-title">第 1 关通过!</div>
           <div id="reward-score" class="over-score">30 : 20</div>
           <div id="reward-sub" class="over-sub">选择一件战利品</div>
@@ -116,6 +179,7 @@ export class UI {
     if (['easy', 'normal', 'hard'].includes(savedDifficulty)) {
       this.els.diff.value = savedDifficulty;
     }
+    refreshIcons();
     document.addEventListener('keydown', (event) => this.trapDialogFocus(event));
   }
 
@@ -139,6 +203,7 @@ export class UI {
   setTurn(text, thinking = false) {
     this.els.turn.textContent = text;
     this.els.turn.classList.toggle('thinking-dots', thinking);
+    this.els.turn.closest('.turnbox')?.classList.toggle('thinking', thinking);
   }
 
   toast(msg, dur = 1700) {
@@ -204,9 +269,10 @@ export class UI {
   }
 
   setMuted(muted) {
-    this.els.mute.textContent = muted ? '🔇' : '🔊';
+    this.els.mute.innerHTML = `<i data-lucide="${muted ? 'volume-x' : 'volume-2'}"></i><span>${muted ? '静音' : '音效'}</span>`;
     this.els.mute.setAttribute('aria-label', muted ? '开启音效' : '静音');
     this.els.mute.setAttribute('aria-pressed', String(muted));
+    refreshIcons();
   }
 
   showGameOver({ title, score, sub }) {
@@ -242,11 +308,11 @@ export class UI {
       return;
     }
     this.els.runbar.classList.remove('hidden');
-    const relicsText = relics.map((r) => RELIC_META[r].emoji).join(' ');
     this.els.runbar.textContent =
-      `无尽 · 第 ${level} 关 · ${size}×${size} · 🀄×${handCap}` +
-      `${bonusCount ? ` · 奖励卡×${bonusCount}` : ''}` +
-      `${relicsText ? ' ' + relicsText : ''}${enemyText ? ' · ' + enemyText : ''}`;
+      `第 ${level} 关 · ${size}×${size} · 手牌 ${handCap}` +
+      `${relics.length ? ` · 遗物 ${relics.length}` : ''}` +
+      `${bonusCount ? ` · 奖励卡 ${bonusCount}` : ''}` +
+      `${enemyText ? ' · ' + enemyText : ''}`;
     this.els.runbar.title = this.els.runbar.textContent;
   }
 
@@ -295,15 +361,16 @@ export class UI {
     }
     const usedEnergy = this.selectedCardEnergy();
     this.els.cardbar.classList.remove('hidden');
+    this.els.cardbar.classList.toggle('ai-turn', !selectable);
     this.els.cardCards.innerHTML = '';
     hand.forEach((id, idx) => {
       const meta = CARD_META[id];
       const btn = document.createElement('button');
       btn.type = 'button';
-      btn.className = 'card';
+      btn.className = `card tone-${meta.tone}`;
       btn.dataset.id = id;
       btn.dataset.index = idx;
-      btn.innerHTML = `<span class="card-cost" aria-hidden="true">${meta.cost}</span><span class="card-emoji">${meta.emoji}</span><span class="card-name">${meta.name}</span>`;
+      btn.innerHTML = `<span class="card-cost" aria-hidden="true">${meta.cost}</span><span class="card-art" aria-hidden="true"><i data-lucide="${meta.icon}"></i></span><span class="card-name">${meta.name}</span>`;
       btn.setAttribute('aria-label', `${meta.name},费用 ${meta.cost}:${meta.desc}`);
       if (selectable) {
         const order = this.cardQueue.indexOf(idx);
@@ -350,6 +417,7 @@ export class UI {
       this.els.cardCards.appendChild(btn);
     });
     this.renderCardEnergy(usedEnergy);
+    refreshIcons();
     this.els.cardLabel.textContent = selectable
       ? `你的手牌 · 已用 ${usedEnergy}/${this.cardEnergyMax}${this.cardEnergyHint ? ` · ${this.cardEnergyHint}` : ''} · 按触发顺序选牌`
       : '你的手牌 · 动画结算中…';
@@ -360,12 +428,13 @@ export class UI {
 
   cardTip(meta) {
     const cost = meta.cost ? ` · 行动力 ${meta.cost}` : '';
-    return `<b>${meta.emoji} ${meta.name}${cost}</b><br>${meta.desc}`;
+    return `<span class="tooltip-title tone-${meta.tone || 'amber'}"><i data-lucide="${meta.icon || 'sparkles'}"></i><b>${meta.name}${cost}</b></span><span class="tooltip-desc">${meta.desc}</span>`;
   }
 
   showTooltip(el, html) {
     const tip = this.els.tooltip;
     tip.innerHTML = html;
+    refreshIcons();
     tip.classList.remove('hidden');
     const r = el.getBoundingClientRect();
     tip.style.left = `${Math.min(r.left + r.width / 2, window.innerWidth - 190)}px`;
@@ -380,6 +449,7 @@ export class UI {
   renderAiHand(count, energy = 0, hint = '', used = 0) {
     if (!this.cardsMode) return;
     this.els.cardbar.classList.remove('hidden');
+    this.els.cardbar.classList.add('ai-turn');
     this.els.cardCards.innerHTML = '';
     this.els.cardLabel.textContent = `电脑手牌 · ${count} 张 · 已用 ${used}/${energy}${hint ? ` · ${hint}` : ''}`;
     this.renderCardEnergy(used, energy, '电脑行动力');
@@ -399,21 +469,21 @@ export class UI {
   // ---------- 肉鸽战利品 ----------
 
   showLevelClear(level, score, options) {
-    this.els.rewardTitle.textContent = `第 ${level} 关通过! 🎉`;
+    this.els.rewardTitle.textContent = `第 ${level} 关通过`;
     this.els.rewardScore.textContent = score;
     this.els.rewardOptions.innerHTML = '';
     for (const opt of options) {
       let meta;
       if (opt.kind === 'handcap') {
-        meta = { emoji: '🀄', name: '手牌上限', desc: '永久 +1:可以保留更多战术牌' };
+        meta = { icon: 'hand', tone: 'sky', name: '手牌上限', desc: '永久 +1:可以保留更多战术牌' };
       } else {
         meta = opt.kind === 'relic' ? RELIC_META[opt.id] : CARD_META[opt.id];
       }
       const kindText = opt.kind === 'relic' ? '遗物' : opt.kind === 'handcap' ? '成长' : '卡牌';
       const btn = document.createElement('button');
       btn.type = 'button';
-      btn.className = 'reward-opt';
-      btn.innerHTML = `<span class="reward-emoji">${meta.emoji}</span>
+      btn.className = `reward-opt tone-${meta.tone || 'amber'}`;
+      btn.innerHTML = `<span class="reward-icon" aria-hidden="true"><i data-lucide="${meta.icon || 'sparkles'}"></i></span>
         <span class="reward-text"><b>${kindText} · ${meta.name}</b><span>${meta.desc}</span></span>`;
       btn.setAttribute('aria-label', `${kindText} ${meta.name}:${meta.desc}`);
       btn.addEventListener('click', () => {
@@ -431,11 +501,12 @@ export class UI {
       btn.addEventListener('mouseleave', () => this.hideTooltip());
       this.els.rewardOptions.appendChild(btn);
     }
+    refreshIcons();
     this.openDialog(this.els.reward, this.els.rewardOptions.querySelector('button'));
   }
 
   showRunOver(level, score) {
-    this.els.overTitle.textContent = '闯关失败 💔';
+    this.els.overTitle.textContent = '闯关失败';
     this.els.overScore.textContent = score;
     this.els.overSub.textContent = `无尽模式 · 止步第 ${level} 关 · 遗物和卡牌都丢了,再闯一次!`;
     this.els.again.textContent = '再闯一次';
@@ -443,7 +514,7 @@ export class UI {
   }
 
   showRunComplete(score) {
-    this.els.overTitle.textContent = '通关成功! 🏆';
+    this.els.overTitle.textContent = '通关成功!';
     this.els.overScore.textContent = score;
     this.els.overSub.textContent = '四关全部征服,再闯一次刷新纪录!';
     this.els.again.textContent = '再闯一次';
