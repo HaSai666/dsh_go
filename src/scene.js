@@ -217,6 +217,8 @@ export function buildScene(container) {
   const skyPlate = new THREE.Sprite(skyMaterial);
   skyPlate.name = 'asset-skybox';
   skyPlate.renderOrder = -1;
+  let skyAssetState = 'loading';
+  skyPlate.visible = !document.querySelector('.sky-preload');
   scene.add(skyPlate);
 
   const skyDistance = 42;
@@ -238,28 +240,54 @@ export function buildScene(container) {
   }
   fitSky();
 
-  const skyLoader = new THREE.TextureLoader();
-  skyLoader.load(
-    SKYBOX_ASSET,
-    (texture) => {
-      texture.colorSpace = THREE.SRGBColorSpace;
-      texture.minFilter = THREE.LinearFilter;
-      texture.magFilter = THREE.LinearFilter;
-      texture.generateMipmaps = false;
-      texture.anisotropy = 1;
-      skyMaterial.map = texture;
-      skyMaterial.needsUpdate = true;
-      fallbackSkyTexture.dispose();
-      document.querySelector('.sky-preload')?.remove();
-      skyPlate.userData.assetReady = true;
-    },
-    undefined,
-    () => {
-      // The gradient remains visible if a static host blocks the optional art.
-      document.querySelector('.sky-preload')?.remove();
-      skyPlate.userData.assetReady = false;
+  const configureSkyTexture = (texture) => {
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.minFilter = THREE.LinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    texture.generateMipmaps = false;
+    texture.anisotropy = 1;
+    texture.needsUpdate = true;
+    return texture;
+  };
+  const activateSkyTexture = (texture) => {
+    skyMaterial.map = configureSkyTexture(texture);
+    skyMaterial.needsUpdate = true;
+    fallbackSkyTexture.dispose();
+    skyAssetState = 'ready';
+    skyPlate.visible = true;
+    skyPlate.userData.assetReady = true;
+    document.querySelector('.sky-preload')?.remove();
+  };
+  const useFallbackSky = () => {
+    // The gradient remains visible if a static host blocks the optional art.
+    document.querySelector('.sky-preload')?.remove();
+    skyAssetState = 'fallback';
+    skyPlate.visible = true;
+    skyPlate.userData.assetReady = false;
+  };
+  const preloadImage = document.querySelector('.sky-preload');
+  if (preloadImage) {
+    const usePreloadedImage = () => {
+      if (skyAssetState !== 'loading' || !preloadImage.naturalWidth) return;
+      activateSkyTexture(new THREE.Texture(preloadImage));
+    };
+    if (preloadImage.complete) {
+      if (preloadImage.naturalWidth) usePreloadedImage();
+      else useFallbackSky();
     }
-  );
+    else {
+      preloadImage.addEventListener('load', usePreloadedImage, { once: true });
+      preloadImage.addEventListener('error', useFallbackSky, { once: true });
+    }
+  } else {
+    const skyLoader = new THREE.TextureLoader();
+    skyLoader.load(
+      SKYBOX_ASSET,
+      (texture) => activateSkyTexture(texture),
+      undefined,
+      useFallbackSky
+    );
+  }
 
   // 室内环境贴图:给釉面棋子和外框提供稳定反光。
   const pmrem = new THREE.PMREMGenerator(renderer);
@@ -1424,7 +1452,7 @@ export function buildScene(container) {
     if (idleMode === on) return;
     idleMode = on;
     homePetsGroup.visible = on;
-    skyPlate.visible = true;
+    skyPlate.visible = skyAssetState !== 'loading';
     container.classList.toggle('idle-scene', on);
     decorGroup.visible = true;
     boardGroup.scale.setScalar(on ? 0.84 : 1);
