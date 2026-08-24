@@ -18,9 +18,9 @@ import {
   isGameOver,
   legalMoves,
   opponent,
-  spawnBoard,
 } from './src/game.js';
 import { chooseCards, chooseMove } from './src/ai.js';
+import { createRunBoard } from './src/run.js';
 
 function seededRandom(seed) {
   let state = seed >>> 0;
@@ -94,7 +94,7 @@ function playGame(seed) {
   Math.random = seededRandom(seed);
   try {
     const state = {
-      board: spawnBoard(RICH_PATTERNS[Math.floor(Math.random() * RICH_PATTERNS.length)]),
+      board: createRunBoard(1, RICH_PATTERNS[Math.floor(Math.random() * RICH_PATTERNS.length)]),
       hands: { [BLACK]: [], [WHITE]: [] },
       handCaps: { [BLACK]: 4, [WHITE]: 4 }, // 第 1 关同上限,后手只获行动力补偿
       movesPlayed: { [BLACK]: 0, [WHITE]: 0 },
@@ -155,7 +155,10 @@ function playGame(seed) {
     }
 
     const { black, white } = countDiscs(state.board);
-    return black > white ? BLACK : white > black ? WHITE : null;
+    return {
+      winner: black > white ? BLACK : white > black ? WHITE : null,
+      steps,
+    };
   } finally {
     Math.random = originalRandom;
   }
@@ -165,11 +168,15 @@ const games = 96;
 let firstWins = 0;
 let secondWins = 0;
 let draws = 0;
+let totalSteps = 0;
+let maxSteps = 0;
 for (let seed = 1; seed <= games; seed++) {
-  const winner = playGame(0x9e3779b9 ^ seed);
+  const { winner, steps } = playGame(0x9e3779b9 ^ seed);
   if (winner === BLACK) firstWins++;
   else if (winner === WHITE) secondWins++;
   else draws++;
+  totalSteps += steps;
+  maxSteps = Math.max(maxSteps, steps);
 }
 
 const decisive = firstWins + secondWins;
@@ -177,6 +184,10 @@ const firstRate = decisive ? firstWins / decisive : 0;
 console.log(
   `卡牌平衡模拟 ${games} 局:先手 ${firstWins} 胜,后手 ${secondWins} 胜,平局 ${draws},先手胜率 ${(firstRate * 100).toFixed(1)}%`
 );
-const passed = decisive >= 48 && firstRate >= 0.35 && firstRate <= 0.65;
-console.log(passed ? '✅ 先后手胜率处于回归区间' : '❌ 先后手胜率超出 35%~65% 回归区间');
+console.log(`快局步数:平均 ${(totalSteps / games).toFixed(1)} 手,最多 ${maxSteps} 手`);
+const balancePassed = decisive >= 48 && firstRate >= 0.35 && firstRate <= 0.65;
+const pacePassed = totalSteps / games <= 52 && maxSteps <= 72;
+const passed = balancePassed && pacePassed;
+console.log(balancePassed ? '✅ 先后手胜率处于回归区间' : '❌ 先后手胜率超出 35%~65% 回归区间');
+console.log(pacePassed ? '✅ 对局步数处于三分钟快局预算' : '❌ 对局步数超出快局预算');
 process.exit(passed ? 0 : 1);

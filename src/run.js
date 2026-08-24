@@ -1,6 +1,14 @@
 // 无尽模式的纯规则:关卡成长、手牌上限与战利品。
 // 保持无 DOM/Three.js 依赖,便于直接用 Node 回归测试。
-import { BLACK, CARD_META, CARD_POOL, RELIC_META, RELIC_POOL } from './game.js';
+import {
+  BLACK,
+  WHITE,
+  CARD_META,
+  CARD_POOL,
+  RELIC_META,
+  RELIC_POOL,
+  spawnBoard,
+} from './game.js';
 
 export const BASE_HAND_CAP = 4;
 export const MAX_HAND_CAP = 10;
@@ -16,12 +24,32 @@ export function runConfigFor(level) {
     handBonus: Math.min(Math.floor((l - 1) / 2), 6),
     magnet: l >= 2,
     extraDiscs: l >= 3 ? Math.min(2 + (l - 3), 10) : 0,
-    budget: Math.min(600 + (l - 1) * 200, 2000),
+    // 小盘面不需要长时间穷举。限制同步搜索预算,避免电脑回合阻塞渲染。
+    budget: Math.min(600 + (l - 1) * 50, 800),
   };
 }
 
 export function boardSizeFor(level) {
-  return Math.min(12 + Math.max(0, level - 1), 18);
+  return Math.max(1, level) < 4 ? 8 : 10;
+}
+
+// 快局保持约 40~48 个自然落子位:8×8 沿用 24 子富开局;
+// 10×10 在中心阵外补一圈对称棋子,共 52 子,避免后期关卡拖长。
+export function createRunBoard(level, variant) {
+  const size = boardSizeFor(level);
+  const board = spawnBoard(variant, size);
+  if (size < 10) return board;
+
+  const lo = 1;
+  const hi = size - 2;
+  for (let r = lo; r <= hi; r++) {
+    for (let c = lo; c <= hi; c++) {
+      if (r === lo || r === hi || c === lo || c === hi) {
+        board[r][c] = (r + c) % 2 ? BLACK : WHITE;
+      }
+    }
+  }
+  return board;
 }
 
 export function extraSpotsFor(size) {

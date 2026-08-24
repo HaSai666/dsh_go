@@ -349,7 +349,7 @@ export function buildScene(container) {
     slab.receiveShadow = true;
     baseGroup.add(slab);
 
-    // 格子合并为一次实例化绘制。颜色仍交替,但 18×18 时不再产生 324 次 draw call。
+    // 格子合并为一次实例化绘制。颜色仍交替,高密盘面也不会逐格增加 draw call。
     const cellMaterial = new THREE.MeshLambertMaterial({
       color: 0xffffff,
       map: feltTexture,
@@ -391,10 +391,12 @@ export function buildScene(container) {
     const yNear = (mobile ? 2.7 : 3.66) * (boardWorld / 13.4);
     const distNearH = nearOff + (boardWorld / 2 - 1.2) / (0.95 * tanH);
     const distNearV = nearOff + yNear / (0.29925);
-    const d = Math.min(
+    const fittedDistance = Math.min(
       Math.max(distW, distH, mobile ? Math.max(distNearH, distNearV) : 0, 10),
       60
     );
+    // 桌面给 HUD 和桌面留出呼吸区;移动端只轻微退后,保持触控目标足够大。
+    const d = Math.min(fittedDistance * (mobile ? 1.05 : 1.11), 60);
     camera.position.set(0, a * d, b * d);
     controls.minDistance = d * 0.7;
     controls.maxDistance = d * 1.9;
@@ -452,7 +454,7 @@ export function buildScene(container) {
   };
 
   // 静止棋子按颜色合并为两次实例化绘制。正在坠落/翻转的棋子临时切回独立网格,
-  // 动画结束后立即并回实例组,兼顾逐子动画与 18×18 后期盘面的帧率。
+  // 动画结束后立即并回实例组,兼顾逐子动画与高密盘面的帧率。
   const pieceInstances = {
     [BLACK]: new THREE.InstancedMesh(pieceGeo, mats[BLACK], 18 * 18),
     [WHITE]: new THREE.InstancedMesh(pieceGeo, mats[WHITE], 18 * 18),
@@ -680,7 +682,7 @@ export function buildScene(container) {
 
   // 坠落拍击:自由落体曲线,Promise 在拍上棋盘时 resolve。
   // QA 慢动作下同步拉长,便于无头定点抓拍(生产恒为 1)。
-  function dropPiece(piece) {
+  function dropPiece(piece, pace = 1) {
     if (reduceMotion.matches) {
       piece.mesh.position.y = PIECE_Y;
       endPieceAnimation(piece);
@@ -689,7 +691,7 @@ export function buildScene(container) {
     const ts = window.__QA_SLOWMO || 1;
     return new Promise((resolve) => {
       tweens.add({
-        dur: 0.3 * ts,
+        dur: 0.3 * pace * ts,
         ease: easings.easeInQuad,
         update: (e) => {
           piece.mesh.position.y = PIECE_Y + 2.8 * (1 - e);
@@ -737,7 +739,7 @@ export function buildScene(container) {
 
   // 翻面:绕"垂直于 落点→棋子 方向"的水平轴翻转半圈,半程换色。
   // 翻转时小跳 + 横向收窄,防止棋子边缘在旋转中穿过格面造成穿插/闪烁。
-  function flipPiece(piece, color, axisX, axisZ) {
+  function flipPiece(piece, color, axisX, axisZ, pace = 1) {
     if (reduceMotion.matches) {
       piece.mesh.quaternion.identity();
       piece.mesh.position.y = PIECE_Y;
@@ -751,7 +753,7 @@ export function buildScene(container) {
       const axis = new THREE.Vector3(axisX, 0, axisZ).normalize();
       let swapped = false;
       tweens.add({
-        dur: 0.22,
+        dur: 0.22 * pace,
         update: (e) => {
           const s = Math.sin(Math.PI * e);
           piece.mesh.quaternion.setFromAxisAngle(axis, Math.PI * e);
@@ -823,7 +825,7 @@ export function buildScene(container) {
   }
 
   // 爆破卡:棋子被炸飞(放大+上升后消失)。
-  function popPiece(piece) {
+  function popPiece(piece, pace = 1) {
     if (reduceMotion.matches) {
       piece.active = false;
       piece.mesh.visible = false;
@@ -833,7 +835,7 @@ export function buildScene(container) {
     beginPieceAnimation(piece);
     return new Promise((resolve) => {
       tweens.add({
-        dur: 0.28,
+        dur: 0.28 * pace,
         update: (e) => {
           piece.mesh.scale.setScalar(1 + 0.4 * e);
           piece.mesh.position.y = PIECE_Y + 0.6 * e;

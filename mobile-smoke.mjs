@@ -44,7 +44,7 @@ async function probe(viewport, label) {
   ok(`${label} 关卡栏可见`, runbarVisible);
 
   // 棋盘四角全部在屏幕内(构图自适应)
-  const fit = await page.evaluate(() => {
+  const boardFit = () => page.evaluate(() => {
     const g = window.__game;
     const ctx = window.__ctx;
     const proj = (r, c) => {
@@ -52,13 +52,23 @@ async function probe(viewport, label) {
       v.project(ctx.camera);
       return { r, c, x: ((v.x + 1) / 2) * innerWidth, y: ((-v.y + 1) / 2) * innerHeight };
     };
-    const pts = [proj(0, 0), proj(0, 11), proj(11, 0), proj(11, 11)];
+    const last = g.board.length - 1;
+    const pts = [proj(0, 0), proj(0, last), proj(last, 0), proj(last, last)];
     return {
       ok: pts.every((p) => p.x > 4 && p.x < innerWidth - 4 && p.y > 4 && p.y < innerHeight - 4),
       pts: pts.map((p) => `(${p.r},${p.c})->(${p.x.toFixed(0)},${p.y.toFixed(0)})`).join(' '),
     };
   });
+  const fit = await boardFit();
   ok(`${label} 棋盘完整可见`, fit.ok, fit.pts);
+
+  await page.evaluate(() => {
+    window.__game.run.level = 4;
+    window.__game.newGame();
+  });
+  await page.waitForTimeout(500);
+  const lateFit = await boardFit();
+  ok(`${label} 10×10 后期棋盘完整可见`, lateFit.ok, lateFit.pts);
 
   // 触屏点击合法落点
   const pt = await page.evaluate(() => {

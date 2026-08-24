@@ -135,15 +135,17 @@ svg {
   inset: 0;
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   overflow-y: auto;
   padding:
-    max(20px, env(safe-area-inset-top))
+    max(24px, env(safe-area-inset-top))
     max(16px, env(safe-area-inset-right))
-    max(20px, env(safe-area-inset-bottom))
-    max(16px, env(safe-area-inset-left));
+    max(24px, env(safe-area-inset-bottom))
+    max(clamp(36px, 8vw, 124px), env(safe-area-inset-left));
   pointer-events: auto;
-  background: linear-gradient(180deg, rgb(4 8 6 / 0.18), rgb(4 8 6 / 0.42));
+  background:
+    linear-gradient(90deg, rgb(3 7 5 / 0.9) 0%, rgb(3 7 5 / 0.68) 28%, rgb(3 7 5 / 0.12) 60%),
+    linear-gradient(180deg, rgb(3 7 5 / 0.08), rgb(3 7 5 / 0.28));
   transition: opacity 0.34s ease;
 }
 
@@ -153,15 +155,15 @@ svg {
 }
 
 .home-inner {
-  width: min(100%, 760px);
-  text-align: center;
-  animation: home-in 0.54s cubic-bezier(0.2, 0.75, 0.25, 1) both;
+  width: min(100%, 410px);
+  text-align: left;
+  animation: home-in 0.44s cubic-bezier(0.2, 0.75, 0.25, 1) both;
 }
 
 @keyframes home-in {
   from {
     opacity: 0;
-    transform: translateY(18px);
+    transform: translateX(-14px);
   }
   to {
     opacity: 1;
@@ -169,15 +171,21 @@ svg {
   }
 }
 
-.home-brand {
-  position: relative;
-  width: 60px;
-  height: 35px;
-  margin: 0 auto 14px;
+.home-header {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  margin-bottom: 38px;
 }
 
-.brand-disc,
-.mode-disc {
+.home-brand {
+  position: relative;
+  width: 52px;
+  height: 31px;
+  flex: 0 0 auto;
+}
+
+.brand-disc {
   position: absolute;
   display: block;
   border-radius: 50%;
@@ -186,8 +194,8 @@ svg {
 
 .brand-disc {
   top: 1px;
-  width: 34px;
-  box-shadow: 0 10px 20px rgb(0 0 0 / 0.38);
+  width: 30px;
+  box-shadow: 0 8px 18px rgb(0 0 0 / 0.42);
 }
 
 .brand-disc-black {
@@ -204,123 +212,71 @@ svg {
 }
 
 .home-title {
-  font-size: 52px;
-  line-height: 1.05;
-  font-weight: 820;
-  text-shadow: 0 12px 40px rgb(0 0 0 / 0.56);
+  font-size: 40px;
+  line-height: 1;
+  font-weight: 790;
+  text-shadow: 0 8px 28px rgb(0 0 0 / 0.46);
 }
 
 .home-sub {
-  display: inline-block;
-  margin-left: 9px;
-  color: var(--gold);
-  font-size: 16px;
+  margin-bottom: 4px;
+  color: rgb(244 240 229 / 0.5);
+  font-size: 11px;
   font-weight: 650;
-  vertical-align: 6px;
-}
-
-.home-tagline {
-  margin: 11px 0 29px;
-  color: rgb(244 240 229 / 0.68);
-  font-size: 14px;
 }
 
 .mode-cards {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  grid-template-columns: 1fr;
   width: 100%;
+  border-top: 1px solid var(--line);
 }
 
 .mode-card {
   position: relative;
   display: grid;
-  grid-template-columns: 62px minmax(0, 1fr) 22px;
+  grid-template-columns: 38px minmax(0, 1fr) 20px;
   align-items: center;
-  gap: 15px;
-  min-height: 126px;
-  overflow: hidden;
-  padding: 20px;
+  gap: 12px;
+  min-height: 78px;
+  padding: 12px 4px;
   color: inherit;
   text-align: left;
   cursor: pointer;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: rgb(7 12 10 / 0.95);
-  box-shadow:
-    0 18px 48px rgb(0 0 0 / 0.4),
-    inset 0 1px 0 rgb(255 255 255 / 0.06);
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
   transition:
-    transform 0.18s ease,
-    border-color 0.18s ease,
-    background 0.18s ease,
-    box-shadow 0.18s ease;
+    color 0.16s ease,
+    background 0.16s ease;
 }
 
 .mode-card::before {
   position: absolute;
-  top: 0;
-  right: 0;
-  left: 0;
-  height: 3px;
+  top: 15px;
+  bottom: 15px;
+  left: -12px;
+  width: 2px;
   content: "";
-  background: rgb(255 255 255 / 0.32);
-  opacity: 0.5;
-}
-
-#mode-cards::before {
   background: var(--gold);
-  opacity: 0.9;
+  opacity: 0;
+  transform: scaleY(0.4);
+  transition: opacity 0.16s ease, transform 0.16s ease;
 }
 
 .mode-card:hover {
-  transform: translateY(-5px);
-  border-color: rgb(242 189 99 / 0.58);
-  background: rgb(11 19 16 / 0.96);
-  box-shadow:
-    0 24px 60px rgb(0 0 0 / 0.52),
-    0 0 0 1px rgb(242 189 99 / 0.08);
+  background: linear-gradient(90deg, rgb(242 189 99 / 0.07), transparent 72%);
+}
+
+.mode-card:hover::before,
+.mode-card:focus-visible::before {
+  opacity: 1;
+  transform: scaleY(1);
 }
 
 .mode-card:active {
-  transform: translateY(-1px) scale(0.985);
-}
-
-.mode-visual {
-  position: relative;
-  display: grid;
-  place-items: center;
-  width: 62px;
-  height: 62px;
-  color: var(--gold);
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  background: rgb(255 255 255 / 0.045);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08);
-}
-
-.mode-visual svg {
-  width: 29px;
-  height: 29px;
-}
-
-.mode-visual-classic .mode-disc {
-  top: 17px;
-  width: 29px;
-  box-shadow: 0 7px 10px rgb(0 0 0 / 0.36);
-}
-
-.mode-disc-black {
-  left: 10px;
-  z-index: 2;
-  background: radial-gradient(circle at 34% 24%, #58615e, #070908 68%);
-  border: 1px solid rgb(255 255 255 / 0.17);
-}
-
-.mode-disc-white {
-  right: 10px;
-  background: radial-gradient(circle at 34% 24%, #fff, #d8d3c6 72%);
-  border: 1px solid rgb(255 255 255 / 0.5);
+  background: linear-gradient(90deg, rgb(242 189 99 / 0.11), transparent 72%);
 }
 
 .mode-copy {
@@ -333,22 +289,28 @@ svg {
   display: block;
 }
 
+.mode-index {
+  color: rgb(244 240 229 / 0.34);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
 .mode-name {
-  margin-bottom: 7px;
-  font-size: 19px;
-  font-weight: 750;
+  margin-bottom: 5px;
+  font-size: 17px;
+  font-weight: 720;
 }
 
 .mode-desc {
   max-width: 27ch;
-  color: rgb(244 240 229 / 0.58);
-  font-size: 12.5px;
-  line-height: 1.55;
+  color: rgb(244 240 229 / 0.48);
+  font-size: 11.5px;
+  line-height: 1.4;
 }
 
 .mode-arrow {
-  width: 19px;
-  color: rgb(244 240 229 / 0.45);
+  width: 17px;
+  color: rgb(244 240 229 / 0.34);
   transition: transform 0.18s ease, color 0.18s ease;
 }
 
@@ -357,23 +319,22 @@ svg {
   transform: translateX(3px);
 }
 
-.badge {
-  display: inline-block;
-  margin-left: 6px;
-  padding: 2px 6px;
-  color: #18130a;
-  font-size: 10px;
-  font-weight: 800;
-  vertical-align: 2px;
-  border-radius: 4px;
-  background: var(--gold);
+.home-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 20px;
+  color: rgb(244 240 229 / 0.43);
+  font-size: 11px;
 }
 
-.home-tip {
-  margin-top: 22px;
-  color: rgb(244 240 229 / 0.46);
-  font-size: 12px;
-  line-height: 1.6;
+.home-status span {
+  width: 7px;
+  height: 7px;
+  border: 1px solid rgb(255 255 255 / 0.16);
+  border-radius: 50%;
+  background: #090b0a;
+  box-shadow: inset 1px 1px 2px rgb(255 255 255 / 0.17);
 }
 
 /* Top HUD */
@@ -1278,60 +1239,48 @@ svg {
 @media (max-width: 760px) {
   .home {
     align-items: center;
+    padding:
+      max(20px, env(safe-area-inset-top))
+      max(22px, env(safe-area-inset-right))
+      max(20px, env(safe-area-inset-bottom))
+      max(22px, env(safe-area-inset-left));
+    background:
+      linear-gradient(90deg, rgb(3 7 5 / 0.84), rgb(3 7 5 / 0.42)),
+      linear-gradient(180deg, rgb(3 7 5 / 0.08), rgb(3 7 5 / 0.34));
   }
 
   .home-inner {
-    width: min(100%, 410px);
+    width: min(100%, 360px);
   }
 
-  .home-brand {
-    margin-bottom: 10px;
-    transform: scale(0.84);
+  .home-header {
+    gap: 12px;
+    margin-bottom: 26px;
   }
 
   .home-title {
-    font-size: 35px;
+    font-size: 34px;
   }
 
   .home-sub {
-    margin-left: 6px;
-    font-size: 12px;
-    vertical-align: 4px;
+    margin-bottom: 3px;
+    font-size: 10px;
   }
 
-  .home-tagline {
-    margin: 8px 0 20px;
-    font-size: 12px;
+  .home-brand {
+    width: 47px;
+    height: 28px;
   }
 
-  .mode-cards {
-    grid-template-columns: 1fr;
-    gap: 9px;
+  .brand-disc {
+    width: 27px;
   }
 
   .mode-card {
-    grid-template-columns: 50px minmax(0, 1fr) 18px;
-    gap: 12px;
-    min-height: 86px;
-    padding: 12px 14px;
-  }
-
-  .mode-visual {
-    width: 50px;
-    height: 50px;
-  }
-
-  .mode-visual-classic .mode-disc {
-    top: 14px;
-    width: 23px;
-  }
-
-  .mode-disc-black {
-    left: 8px;
-  }
-
-  .mode-disc-white {
-    right: 8px;
+    grid-template-columns: 30px minmax(0, 1fr) 18px;
+    gap: 10px;
+    min-height: 70px;
+    padding: 10px 2px;
   }
 
   .mode-name {
@@ -1343,9 +1292,9 @@ svg {
     font-size: 11px;
   }
 
-  .home-tip {
-    margin-top: 15px;
-    font-size: 10.5px;
+  .home-status {
+    margin-top: 16px;
+    font-size: 10px;
   }
 
   .top-left {

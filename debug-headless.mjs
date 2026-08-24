@@ -515,7 +515,7 @@ console.log('→ 肉鸽第 2 关 → 第 3 关(验证敌方特权递增)');
 // 第 2 关双方手牌上限仍为 4
 const l2Hand = await page.evaluate(() => window.__game.hands[2].length);
 const l2Size = await page.evaluate(() => window.__game.board.length);
-if (l2Hand !== 4 || l2Size !== 13) {
+if (l2Hand !== 4 || l2Size !== 8) {
   console.log(`❌ 第 2 关敌方配置异常: aiHand=${l2Hand} size=${l2Size}`);
   process.exit(1);
 }
@@ -555,8 +555,8 @@ const l3 = await page.evaluate(() => {
   }
   return { level: g.run.level, aiHand: g.hands[2].length, white, size: g.board.length };
 });
-// 第 3 关:敌方手牌上限 4+1=5;白子 = 富开局 12 + 特权 2 = 14;棋盘 14×14
-const l3Ok = l3.level === 3 && l3.aiHand === 5 && l3.white === 14 && l3.size === 14;
+// 第 3 关:敌方手牌上限 4+1=5;白子 = 富开局 12 + 特权 2 = 14;棋盘 8×8
+const l3Ok = l3.level === 3 && l3.aiHand === 5 && l3.white === 14 && l3.size === 8;
 console.log(`→ 第 3 关特权校验: level=${l3.level} aiHand=${l3.aiHand} white=${l3.white} size=${l3.size}`);
 if (!l3Ok) {
   console.log('❌ 第 3 关敌方特权异常');
@@ -606,8 +606,8 @@ const l4 = await page.evaluate(() => {
   }
   return { level: g.run.level, aiHand: g.hands[2].length, white, size: g.board.length };
 });
-// 第 4 关:敌方手牌上限 4+1=5;白子 = 12 + 特权 3 = 15;棋盘 15×15
-const l4Ok = l4.level === 4 && l4.aiHand === 5 && l4.white === 15 && l4.size === 15;
+// 第 4 关:10×10 使用 52 子富开局;白子 = 26 + 特权 3 = 29
+const l4Ok = l4.level === 4 && l4.aiHand === 5 && l4.white === 29 && l4.size === 10;
 console.log(`→ 第 4 关特权校验: level=${l4.level} aiHand=${l4.aiHand} white=${l4.white} size=${l4.size}`);
 if (!l4Ok) {
   console.log('❌ 第 4 关敌方特权异常');
@@ -652,8 +652,8 @@ const l5 = await page.evaluate(() => {
   }
   return { level: g.run.level, aiHand: g.hands[2].length, white, size: g.board.length };
 });
-// 第 5 关:敌方手牌上限 4+2=6;白子 = 12 + 特权 4 = 16;棋盘 16×16
-const l5Ok = l5.level === 5 && l5.aiHand === 6 && l5.white === 16 && l5.size === 16;
+// 第 5 关:敌方手牌上限 4+2=6;白子 = 26 + 特权 4 = 30;棋盘 10×10
+const l5Ok = l5.level === 5 && l5.aiHand === 6 && l5.white === 30 && l5.size === 10;
 console.log(`→ 第 5 关特权校验: level=${l5.level} aiHand=${l5.aiHand} white=${l5.white} size=${l5.size}`);
 if (!l5Ok) {
   console.log('❌ 无尽模式特权递增异常');

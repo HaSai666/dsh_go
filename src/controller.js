@@ -14,7 +14,6 @@ import {
   playerName,
   opponent,
   cellName,
-  spawnBoard,
   RICH_PATTERNS,
   drawCard,
   cardBlast,
@@ -33,6 +32,7 @@ import {
 import { chooseMove, chooseCards } from './ai.js';
 import {
   boardSizeFor,
+  createRunBoard,
   createRun,
   extraSpotsFor,
   grantReward,
@@ -51,6 +51,8 @@ const delay = (ms) =>
         (window.__QA_SLOWMO || 1)
     )
   );
+
+const CARD_MODE_PACE = 0.62;
 
 export class Game {
   constructor(ctx, ui, audio) {
@@ -181,6 +183,14 @@ export class Game {
   aiDifficulty() {
     if (this.run) return this.runCfg().diff;
     return this.difficulty;
+  }
+
+  animationPace() {
+    return this.mode === 'cards' ? CARD_MODE_PACE : 1;
+  }
+
+  wait(ms) {
+    return delay(ms * this.animationPace());
   }
 
   enemyPerksText() {
@@ -347,11 +357,14 @@ export class Game {
   newGame() {
     this.generation++;
     this.trace = [];
-    // 经典模式固定 12×12 经典开局;无尽每关棋盘增大 + 富开局(24 子)随机二选一
+    // 经典模式固定 12×12;无尽模式使用 8~10 格快局与富开局。
     const size = this.mode === 'cards' && this.run ? boardSizeFor(this.run.level) : 12;
     this.board =
       this.mode === 'cards' && this.run
-        ? spawnBoard(RICH_PATTERNS[Math.floor(Math.random() * RICH_PATTERNS.length)], size)
+        ? createRunBoard(
+            this.run.level,
+            RICH_PATTERNS[Math.floor(Math.random() * RICH_PATTERNS.length)]
+          )
         : initialBoard(size);
     this.ctx.resizeBoard(size);
     this.hands = {
@@ -456,7 +469,7 @@ export class Game {
 
     // ① 坠落拍击
     const piece = this.ctx.placePiece(r, c, player);
-    await this.ctx.dropPiece(piece);
+    await this.ctx.dropPiece(piece, this.animationPace());
     if (gen !== this.generation) return;
     this.logTrace('impact');
     this.audio.place(flips.length);
@@ -471,16 +484,16 @@ export class Game {
       .map(([fr, fc]) => ({ r: fr, c: fc, d: Math.hypot(fr - r, fc - c) }))
       .sort((a, b) => a.d - b.d);
     for (let i = 0; i < flipsSorted.length; i++) {
-      await delay(i === 0 ? 120 : 55);
+      await this.wait(i === 0 ? 120 : 55);
       if (gen !== this.generation) return;
       const f = flipsSorted[i];
       const p = this.ctx.pieceAt(f.r, f.c);
       if (p) {
         this.audio.flip(i);
-        this.ctx.flipPiece(p, player, -(f.c - c), f.r - r);
+        this.ctx.flipPiece(p, player, -(f.c - c), f.r - r, this.animationPace());
       }
     }
-    await delay(260);
+    await this.wait(260);
     if (gen !== this.generation) return;
     this.logTrace('flips');
 
@@ -499,7 +512,7 @@ export class Game {
       this.audio.shield();
       this.ui.setShield(null);
       this.ui.toast('🛡️ 护盾挡下了翻转!', 2200);
-      await delay(450);
+      await this.wait(450);
       if (gen !== this.generation) return;
     }
 
@@ -513,7 +526,7 @@ export class Game {
       );
       this.audio.boom();
       this.ui.toast(`💥 大翻盘!一步翻 ${flips.length} 子`, 2200);
-      await delay(400);
+      await this.wait(400);
       if (gen !== this.generation) return;
     }
 
@@ -566,8 +579,8 @@ export class Game {
     const p = this.ctx.pieceAt(mr, mc);
     if (p) {
       this.audio.flip(2);
-      this.ctx.flipPiece(p, player, -(mc - c) || 1, mr - r);
-      await delay(200);
+      this.ctx.flipPiece(p, player, -(mc - c) || 1, mr - r, this.animationPace());
+      await this.wait(200);
       if (gen !== this.generation) return;
     }
   }
@@ -592,7 +605,7 @@ export class Game {
       id === 'combo' || id === 'shield' ? 48 : 34,
       cardColors[id] || 0xffc96b
     );
-    await delay(120);
+    await this.wait(120);
     if (gen !== this.generation) return false;
 
     if (id === 'echo') {
@@ -601,7 +614,7 @@ export class Game {
         return false;
       }
       this.ui.toast(`🔁 回响!重复「${CARD_META[prevCard].name}」`, 2000);
-      await delay(150);
+      await this.wait(150);
       if (gen !== this.generation) return false;
       return this.playCard(prevCard, r, c, player, gen);
     }
@@ -642,13 +655,13 @@ export class Game {
 
     let i = 0;
     for (const [tr, tc] of targets) {
-      await delay(110);
+      await this.wait(110);
       if (gen !== this.generation) return false;
       if (effect === 'grow') {
         this.board[tr][tc] = player;
         const np = this.ctx.placePiece(tr, tc, player);
         this.audio.flip(i);
-        this.ctx.dropPiece(np);
+        this.ctx.dropPiece(np, this.animationPace());
       } else if (effect === 'remove') {
         this.board[tr][tc] = EMPTY;
         const p = this.ctx.pieceAt(tr, tc);
@@ -661,19 +674,19 @@ export class Game {
             60,
             0xff655f
           );
-          this.ctx.popPiece(p);
+          this.ctx.popPiece(p, this.animationPace());
         }
       } else {
         this.board[tr][tc] = player;
         const p = this.ctx.pieceAt(tr, tc);
         if (p) {
           this.audio.flip(i);
-          this.ctx.flipPiece(p, player, -(tc - c) || 1, tr - r);
+          this.ctx.flipPiece(p, player, -(tc - c) || 1, tr - r, this.animationPace());
         }
       }
       i++;
     }
-    await delay(320);
+    await this.wait(320);
     return false;
   }
 
@@ -777,7 +790,7 @@ export class Game {
         );
       }
       this.commitMove(mv[0], mv[1], WHITE, cards);
-    }, 380 * (window.__QA_SLOWMO || 1));
+    }, (this.mode === 'cards' ? 120 : 380) * (window.__QA_SLOWMO || 1));
   }
 
   async endGame() {
@@ -809,23 +822,23 @@ export class Game {
         }
       }
       if (cells.length) {
-        await delay(500);
+        await this.wait(500);
         for (let i = 0; i < cells.length; i++) {
           if (gen !== this.generation) return;
           const { r, c } = cells[i];
           const p = this.ctx.pieceAt(r, c);
           if (p) {
             this.audio.flip(i);
-            this.ctx.flipPiece(p, winner, 1, 0);
+            this.ctx.flipPiece(p, winner, 1, 0, this.animationPace());
           }
-          await delay(40);
+          await this.wait(40);
         }
         if (gen !== this.generation) return;
         this.audio.boom();
-        await delay(400);
+        await this.wait(400);
       }
     } else {
-      await delay(400);
+      await this.wait(400);
     }
     if (gen !== this.generation) return;
 

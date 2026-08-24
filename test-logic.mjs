@@ -19,6 +19,7 @@ import { chooseMove } from './src/ai.js';
 import {
   MAX_HAND_CAP,
   boardSizeFor,
+  createRunBoard,
   createRun,
   grantReward,
   handCapFor,
@@ -62,8 +63,8 @@ for (const variant of RICH_PATTERNS) {
   check(`富开局 ${variant} ≥20 子`, c.black + c.white >= 20);
 }
 
-// 更大棋盘尺寸(无尽模式成长):14/18 尺寸开局与阵型正常
-for (const size of [14, 18]) {
+// 快局棋盘尺寸:8/10 尺寸开局与阵型正常
+for (const size of [8, 10]) {
   const b = initialBoard(size);
   check(
     `${size}×${size} 初始局面合法`,
@@ -236,14 +237,32 @@ for (const d of ['easy', 'normal', 'hard']) {
 // ---------- 无尽模式成长 ----------
 {
   const run = createRun();
-  check('无尽模式从 12×12 成长并封顶 18×18', boardSizeFor(1) === 12 && boardSizeFor(7) === 18 && boardSizeFor(99) === 18);
+  check(
+    '无尽模式前 3 关为 8×8,随后封顶 10×10',
+    boardSizeFor(1) === 8 && boardSizeFor(3) === 8 && boardSizeFor(4) === 10 && boardSizeFor(99) === 10
+  );
+  for (const level of [1, 4, 99]) {
+    for (const variant of RICH_PATTERNS) {
+      const board = createRunBoard(level, variant);
+      const counts = countDiscs(board);
+      const empty = board.length ** 2 - counts.black - counts.white;
+      check(
+        `快局 ${level} 关 ${variant} 对称且最多 48 个空位`,
+        counts.black === counts.white &&
+          empty <= 48 &&
+          legalMoves(board, BLACK).length > 0 &&
+          legalMoves(board, WHITE).length > 0,
+        `${board.length}×${board.length},empty=${empty}`
+      );
+    }
+  }
   check(
     '敌方成长配置按关卡递增并封顶',
     runConfigFor(1).handBonus === 0 &&
       runConfigFor(3).handBonus === 1 &&
       runConfigFor(99).handBonus === 6 &&
       runConfigFor(99).extraDiscs === 10 &&
-      runConfigFor(99).budget === 2000
+      runConfigFor(99).budget === 800
   );
 
   check('手牌大师奖励可领取', grantReward(run, { kind: 'relic', id: 'hat' }));

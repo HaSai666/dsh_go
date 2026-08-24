@@ -1,4 +1,4 @@
-// WebGL 帧时间回归:常规盘面守住 60fps,18×18 后期盘面守住 30fps 体验线。
+// WebGL 帧时间回归:覆盖无尽模式的 8×8 常规盘面与 10×10 后期盘面。
 import { chromium } from 'playwright-core';
 
 const URL = process.env.URL || 'http://localhost:5173/';
@@ -68,13 +68,13 @@ async function measure(label, viewport, deviceScaleFactor) {
 
   const profiles = [
     {
-      name: '常规 12×12',
-      size: 12,
+      name: '常规 8×8',
+      size: 8,
       limits: { mean: 20.5, p95: 34, slowRatio: 0.15 },
     },
     {
-      name: '后期 18×18',
-      size: 18,
+      name: '后期 10×10',
+      size: 10,
       limits: label === '桌面'
         ? { mean: 28, p95: 55, slowRatio: 0.5 }
         : { mean: 20.5, p95: 28, slowRatio: 0.08 },
