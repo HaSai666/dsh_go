@@ -207,7 +207,7 @@ export function buildScene(container) {
   // camera, which prevents gaps when the board or viewport changes size.
   const skyMaterial = new THREE.SpriteMaterial({
     map: fallbackSkyTexture,
-    color: 0xb8d0ec,
+    color: 0xc0d6f0,
     transparent: false,
     depthTest: false,
     depthWrite: false,
