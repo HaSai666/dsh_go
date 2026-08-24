@@ -3,12 +3,28 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Tweens, Burst, shakeBoard, easings } from './fx.js';
 import { SIZE, EMPTY, BLACK, WHITE } from './game.js';
 
 const CELL = 1;
-const CELL_Y = 0.215; // 格子表面高度
-const PIECE_Y = CELL_Y + 0.05; // 棋子底面:与格面拉开 0.05,任何深度精度下都不共面
+const CELL_Y = 0.215; // 模块顶面高度
+const PIECE_Y = CELL_Y + 0.05; // 动物脚底略离开模块,避免深度冲突
+const PET_HEIGHT = 0.72;
+const ACCENT = 0xff9b5f;
+
+const ASSET_ROOT = `${import.meta.env.BASE_URL || '/'}assets/kenney`;
+const PET_ASSETS = {
+  [BLACK]: `${ASSET_ROOT}/cube-pets/Models/GLB%20format/animal-cat.glb`,
+  [WHITE]: `${ASSET_ROOT}/cube-pets/Models/GLB%20format/animal-panda.glb`,
+};
+const HOME_FOX_ASSET = `${ASSET_ROOT}/cube-pets/Models/GLB%20format/animal-fox.glb`;
+const ARENA_ASSETS = {
+  block: `${ASSET_ROOT}/mini-arena/Models/GLB%20format/block.glb`,
+  column: `${ASSET_ROOT}/mini-arena/Models/GLB%20format/column.glb`,
+  trophy: `${ASSET_ROOT}/mini-arena/Models/GLB%20format/trophy.glb`,
+};
 
 let curSize = SIZE; // 当前棋盘尺寸(无尽模式随关卡增长)
 
@@ -136,14 +152,14 @@ export function buildScene(container) {
   container.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x070a09);
-  scene.fog = new THREE.Fog(0x070a09, 20, 56);
+  scene.background = new THREE.Color(0x081321);
+  scene.fog = new THREE.Fog(0x081321, 24, 96);
 
   const camera = new THREE.PerspectiveCamera(
     35, // 12×12 大棋盘:视角收窄 + 相机距离拉远,整盘尽收眼底
     window.innerWidth / window.innerHeight,
     1.2, // 近裁剪面推远:压缩深度范围,低精度深度缓冲下更稳
-    60
+    100
   );
   camera.position.set(0, 9.2, 11.2);
 
@@ -163,8 +179,8 @@ export function buildScene(container) {
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 
   // 暖色主光塑造棋子体积,冷色轮廓光把黑棋从暗场中分离出来。
-  scene.add(new THREE.HemisphereLight(0xf4ecdc, 0x07110d, 0.58));
-  const sun = new THREE.DirectionalLight(0xffdfb2, 2.75);
+  scene.add(new THREE.HemisphereLight(0xeaf5ff, 0x081321, 0.82));
+  const sun = new THREE.DirectionalLight(0xffdfb2, 3.1);
   sun.position.set(5.5, 7.5, 6.5);
   sun.castShadow = true;
   const shadowSize = 1024;
@@ -182,10 +198,10 @@ export function buildScene(container) {
   function applyRenderQuality(size) {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, pixelRatioCap(size)));
   }
-  const rim = new THREE.DirectionalLight(0x78b7c2, 1.15);
+  const rim = new THREE.DirectionalLight(0x86c8e0, 1.5);
   rim.position.set(-7, 5, -8);
   scene.add(rim);
-  const fill = new THREE.DirectionalLight(0x7bc49c, 0.36);
+  const fill = new THREE.DirectionalLight(0x8caeea, 0.52);
   fill.position.set(-3, 4, 7);
   scene.add(fill);
 
@@ -193,26 +209,124 @@ export function buildScene(container) {
   scene.add(boardGroup);
   const baseGroup = new THREE.Group(); // 外框/底板/格子:换尺寸时整体重建
   const pieceGroup = new THREE.Group(); // 棋子/幽灵/标记:跨尺寸保留
+  const decorGroup = new THREE.Group(); // 竞技场角柱与徽记,不参与棋盘拾取
+  const homePetsGroup = new THREE.Group(); // 主页展示用的两只观众动物
   boardGroup.add(baseGroup);
   boardGroup.add(pieceGroup);
+  boardGroup.add(decorGroup);
+  boardGroup.add(homePetsGroup);
+
+  const arenaTemplates = new Map();
+  let decorGeometries = [];
+  let decorMaterials = [];
+  const homePetSlots = [
+    { position: [-4.55, 0.2, 3.1], rotation: [0, 0.55, 0], scale: 1.42 },
+    { position: [4.65, 0.2, -2.65], rotation: [0, -0.65, 0], scale: 1.28 },
+  ];
+
+  function clearGroup(group) {
+    for (const child of [...group.children]) {
+      group.remove(child);
+      child.traverse((node) => {
+        if (node.geometry && node.userData?.disposeOnClear) node.geometry.dispose();
+        if (node.material && node.userData?.disposeOnClear) {
+          const materials = Array.isArray(node.material) ? node.material : [node.material];
+          materials.forEach((material) => material.dispose());
+        }
+      });
+    }
+  }
+
+  function makeArenaDecor(size) {
+    decorGeometries.forEach((geometry) => geometry.dispose());
+    decorGeometries = [];
+    decorMaterials.forEach((material) => material.dispose());
+    decorMaterials = [];
+    clearGroup(decorGroup);
+    const edge = size / 2 + 0.72;
+    const cornerMat = new THREE.MeshStandardMaterial({
+      color: 0x567187,
+      roughness: 0.42,
+      metalness: 0.18,
+    });
+    const capMat = new THREE.MeshStandardMaterial({
+      color: ACCENT,
+      roughness: 0.34,
+      metalness: 0.4,
+      emissive: ACCENT,
+      emissiveIntensity: 0.08,
+    });
+    decorMaterials.push(cornerMat, capMat);
+    const pillarGeo = new RoundedBoxGeometry(0.22, 0.74, 0.22, 3, 0.04);
+    const capGeo = new THREE.CylinderGeometry(0.18, 0.22, 0.06, 12);
+    decorGeometries.push(pillarGeo, capGeo);
+    for (const [x, z] of [[-edge, -edge], [edge, -edge], [-edge, edge], [edge, edge]]) {
+      const pillar = arenaTemplates.get('column')?.clone(true) || new THREE.Mesh(pillarGeo, cornerMat);
+      if (pillar.isObject3D && !pillar.isMesh) {
+        normalizeRoot(pillar, 0.8);
+      } else {
+        pillar.material = cornerMat;
+      }
+      pillar.position.set(x, 0.22, z);
+      pillar.traverse((node) => {
+        if (node.isMesh) {
+          if (node.material?.color) node.material.color.setHex(0x6b8295);
+          if (node.material?.roughness !== undefined) node.material.roughness = 0.62;
+          node.castShadow = true;
+          node.receiveShadow = true;
+        }
+      });
+      decorGroup.add(pillar);
+      const cap = arenaTemplates.get('block')?.clone(true) || new THREE.Mesh(capGeo, capMat);
+      if (cap.isObject3D && !cap.isMesh) normalizeRoot(cap, 0.34);
+      else cap.material = capMat;
+      cap.position.set(x, 0.62, z);
+      cap.traverse((node) => {
+        if (node.isMesh) {
+          if (node.material?.color) node.material.color.setHex(ACCENT);
+          if (node.material?.roughness !== undefined) node.material.roughness = 0.5;
+          node.castShadow = true;
+        }
+      });
+      decorGroup.add(cap);
+    }
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(size * 0.33, 0.018, 6, 48),
+      new THREE.MeshBasicMaterial({ color: ACCENT, transparent: true, opacity: 0.28 })
+    );
+    decorMaterials.push(ring.material);
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = CELL_Y + 0.018;
+    decorGroup.add(ring);
+    decorGeometries.push(ring.geometry);
+    const trophy = arenaTemplates.get('trophy')?.clone(true);
+    if (trophy) {
+      normalizeRoot(trophy, 0.58);
+      trophy.position.set(0, 0.23, -edge - 0.28);
+      trophy.traverse((node) => {
+        if (node.isMesh) node.castShadow = true;
+      });
+      decorGroup.add(trophy);
+    }
+  }
 
   const tableTexture = makeSurfaceTexture(renderer, {
-    base: [24, 34, 29],
-    noise: 10,
+    base: [25, 39, 55],
+    noise: 12,
     weave: true,
     seed: 31,
   });
   tableTexture.repeat.set(24, 24);
   const feltTexture = makeSurfaceTexture(renderer, {
-    base: [44, 124, 88],
-    noise: 15,
+    base: [58, 83, 103],
+    noise: 11,
     weave: true,
     seed: 73,
   });
   feltTexture.repeat.set(1.4, 1.4);
   const woodTexture = makeSurfaceTexture(renderer, {
-    base: [30, 27, 23],
-    noise: 14,
+    base: [21, 29, 39],
+    noise: 12,
     grain: true,
     seed: 109,
   });
@@ -224,7 +338,7 @@ export function buildScene(container) {
   const table = new THREE.Mesh(
     new THREE.PlaneGeometry(80, 80),
     new THREE.MeshLambertMaterial({
-      color: 0x7d8a83,
+      color: 0x253b52,
       map: tableTexture,
     })
   );
@@ -234,7 +348,7 @@ export function buildScene(container) {
   scene.add(table);
 
   const frameMat = new THREE.MeshPhysicalMaterial({
-    color: 0xb5afa5,
+    color: 0x33485a,
     map: woodTexture,
     roughness: 0.34,
     metalness: 0.08,
@@ -242,12 +356,12 @@ export function buildScene(container) {
     clearcoatRoughness: 0.32,
   });
   const railMat = new THREE.MeshStandardMaterial({
-    color: 0xc59246,
+    color: ACCENT,
     roughness: 0.32,
     metalness: 0.78,
   });
   const skirtMat = new THREE.MeshStandardMaterial({
-    color: 0x0a0d0c,
+    color: 0x0b111b,
     roughness: 0.58,
     metalness: 0.2,
   });
@@ -255,7 +369,7 @@ export function buildScene(container) {
     color: 0x000000,
     map: boardShadowTexture,
     transparent: true,
-    opacity: 0.5,
+    opacity: 0.42,
     depthWrite: false,
   });
   const sharedBaseMaterials = new Set([frameMat, railMat, skirtMat, boardShadowMat]);
@@ -275,15 +389,16 @@ export function buildScene(container) {
       if (child.material && !sharedBaseMaterials.has(child.material)) child.material.dispose();
     }
     for (const geometry of oldGeometries) geometry.dispose();
+    makeArenaDecor(size);
     cellMesh = null;
     boardShadow = null;
-    cellGeo = new THREE.BoxGeometry(0.935, 0.045, 0.935);
+    cellGeo = new RoundedBoxGeometry(0.86, 0.105, 0.86, 2, 0.045);
 
     // 四块实木墙拼成真正的框
-    const frameOuter = size + 1.5;
-    const wallW = 0.5;
-    const wallH = 0.58;
-    const wallY = -0.02;
+    const frameOuter = size + 1.35;
+    const wallW = 0.42;
+    const wallH = 0.48;
+    const wallY = -0.06;
     const wallCenter = (frameOuter - wallW) / 2;
     const wallLong = new RoundedBoxGeometry(frameOuter, wallH, wallW, 3, 0.055);
     const wallShort = new RoundedBoxGeometry(wallW, wallH, frameOuter - 2 * wallW, 3, 0.055);
@@ -301,10 +416,10 @@ export function buildScene(container) {
     }
 
     // 内圈金属嵌条压住深色木框,也是视觉上判断棋盘边界的高光线。
-    const railOffset = size / 2 + 0.2;
-    const railY = 0.282;
-    const railH = 0.026;
-    const railW = 0.045;
+    const railOffset = size / 2 + 0.17;
+    const railY = 0.28;
+    const railH = 0.035;
+    const railW = 0.04;
     const railLong = new THREE.BoxGeometry(size + 0.44, railH, railW);
     const railShort = new THREE.BoxGeometry(railW, railH, size + 0.44);
     for (const [x, z, geo] of [
@@ -320,10 +435,10 @@ export function buildScene(container) {
     }
 
     const skirt = new THREE.Mesh(
-      new RoundedBoxGeometry(size + 0.82, 0.14, size + 0.82, 3, 0.06),
+      new RoundedBoxGeometry(size + 0.74, 0.18, size + 0.74, 3, 0.06),
       skirtMat
     );
-    skirt.position.y = -0.23;
+    skirt.position.y = -0.27;
     skirt.castShadow = true;
     skirt.receiveShadow = true;
     baseGroup.add(skirt);
@@ -339,29 +454,30 @@ export function buildScene(container) {
 
     // 绒布底板:下沉 0.145,格子像浮雕一样浮在底板上
     const slab = new THREE.Mesh(
-      new RoundedBoxGeometry(size + 0.35, 0.26, size + 0.35, 4, 0.08),
+      new RoundedBoxGeometry(size + 0.22, 0.22, size + 0.22, 4, 0.07),
       new THREE.MeshLambertMaterial({
-        color: 0xd2e4d7,
+        color: 0x263b4d,
         map: feltTexture,
       })
     );
-    slab.position.y = 0.065;
+    slab.position.y = 0.045;
     slab.receiveShadow = true;
     baseGroup.add(slab);
 
     // 格子合并为一次实例化绘制。颜色仍交替,高密盘面也不会逐格增加 draw call。
-    const cellMaterial = new THREE.MeshLambertMaterial({
+    const cellMaterial = new THREE.MeshStandardMaterial({
       color: 0xffffff,
-      map: feltTexture,
+      roughness: 0.64,
+      metalness: 0.04,
     });
     cellMesh = new THREE.InstancedMesh(cellGeo, cellMaterial, size * size);
     const cellMatrix = new THREE.Matrix4();
-    const darkCell = new THREE.Color(0xc1ddcb);
-    const lightCell = new THREE.Color(0xd4e8da);
+    const darkCell = new THREE.Color(0x3e5d73);
+    const lightCell = new THREE.Color(0x4b7088);
     for (let r = 0; r < size; r++) {
       for (let c = 0; c < size; c++) {
         const index = r * size + c;
-        cellMatrix.makeTranslation(cellX(c), CELL_Y - 0.0225, cellZ(r));
+        cellMatrix.makeTranslation(cellX(c), CELL_Y - 0.0525, cellZ(r));
         cellMesh.setMatrixAt(index, cellMatrix);
         cellMesh.setColorAt(index, (r + c) % 2 ? lightCell : darkCell);
       }
@@ -370,6 +486,7 @@ export function buildScene(container) {
     cellMesh.instanceMatrix.needsUpdate = true;
     cellMesh.instanceColor.needsUpdate = true;
     cellMesh.receiveShadow = true;
+    cellMesh.frustumCulled = false;
     baseGroup.add(cellMesh);
   }
 
@@ -396,7 +513,7 @@ export function buildScene(container) {
       60
     );
     // 桌面给 HUD 和桌面留出呼吸区;移动端只轻微退后,保持触控目标足够大。
-    const d = Math.min(fittedDistance * (mobile ? 1.05 : 1.11), 60);
+    const d = Math.min(fittedDistance * (mobile ? 1.12 : 1.27), 60);
     camera.position.set(0, a * d, b * d);
     controls.minDistance = d * 0.7;
     controls.maxDistance = d * 1.9;
@@ -406,8 +523,9 @@ export function buildScene(container) {
   buildBase(SIZE);
   fitCamera(SIZE);
 
-  // 棋子几何体:扁圆盘 + 拱顶(车削成形)。
-  const pieceGeo = new THREE.LatheGeometry(
+  // 素材尚未加载时使用轻量几何回退;GLB 到达后只替换 geometry/material,
+  // 实例化与动画接口保持不变。
+  const fallbackPieceGeo = new THREE.LatheGeometry(
     [
       new THREE.Vector2(0.002, 0),
       new THREE.Vector2(0.4, 0.002),
@@ -421,7 +539,7 @@ export function buildScene(container) {
     20
   );
 
-  // 瓷质黑白双色材质 + 半透明幽灵材质。
+  // 回退材质 + 半透明幽灵材质。
   const mats = {
     [BLACK]: new THREE.MeshPhongMaterial({
       color: 0x050807,
@@ -453,11 +571,14 @@ export function buildScene(container) {
     }),
   };
 
+  const pieceGeos = { [BLACK]: fallbackPieceGeo, [WHITE]: fallbackPieceGeo };
+  const petMats = { [BLACK]: mats[BLACK], [WHITE]: mats[WHITE] };
+
   // 静止棋子按颜色合并为两次实例化绘制。正在坠落/翻转的棋子临时切回独立网格,
   // 动画结束后立即并回实例组,兼顾逐子动画与高密盘面的帧率。
   const pieceInstances = {
-    [BLACK]: new THREE.InstancedMesh(pieceGeo, mats[BLACK], 18 * 18),
-    [WHITE]: new THREE.InstancedMesh(pieceGeo, mats[WHITE], 18 * 18),
+    [BLACK]: new THREE.InstancedMesh(pieceGeos[BLACK], petMats[BLACK], 18 * 18),
+    [WHITE]: new THREE.InstancedMesh(pieceGeos[WHITE], petMats[WHITE], 18 * 18),
   };
   for (const instances of Object.values(pieceInstances)) {
     instances.count = 0;
@@ -528,7 +649,7 @@ export function buildScene(container) {
     const key = r * curSize + c;
     let piece = pieceByCell.get(key);
     if (!piece) {
-      const mesh = new THREE.Mesh(pieceGeo, mats[BLACK]);
+      const mesh = new THREE.Mesh(pieceGeos[BLACK], petMats[BLACK]);
       mesh.castShadow = false;
       mesh.position.set(cellX(c), PIECE_Y, cellZ(r));
       mesh.visible = false;
@@ -542,15 +663,148 @@ export function buildScene(container) {
 
   function setPieceColor(piece, color) {
     piece.color = color;
-    piece.mesh.material = mats[color];
+    piece.mesh.geometry = pieceGeos[color] || fallbackPieceGeo;
+    piece.mesh.material = petMats[color] || mats[color];
   }
 
   // 幽灵棋子:跟随鼠标在合法格上浮动预览。
-  const ghost = new THREE.Mesh(pieceGeo, ghostMats[BLACK]);
+  const ghost = new THREE.Mesh(pieceGeos[BLACK], ghostMats[BLACK]);
   ghost.visible = false;
   ghost.castShadow = false;
   ghost.receiveShadow = false;
   pieceGroup.add(ghost);
+
+  const loader = new GLTFLoader();
+  const ghostPetMats = { [BLACK]: ghostMats[BLACK], [WHITE]: ghostMats[WHITE] };
+  const petRoots = new Map();
+
+  function normalizePetGeometry(geometry) {
+    geometry.computeBoundingBox();
+    const box = geometry.boundingBox;
+    const size = new THREE.Vector3();
+    box.getSize(size);
+    if (!size.y || !Number.isFinite(size.y)) return geometry;
+    const scale = PET_HEIGHT / size.y;
+    geometry.scale(scale, scale, scale);
+    geometry.computeBoundingBox();
+    const normalized = geometry.boundingBox;
+    geometry.translate(
+      -(normalized.min.x + normalized.max.x) / 2,
+      -normalized.min.y,
+      -(normalized.min.z + normalized.max.z) / 2
+    );
+    geometry.computeVertexNormals();
+    geometry.computeBoundingSphere();
+    return geometry;
+  }
+
+  function mergedPetGeometry(root) {
+    root.updateMatrixWorld(true);
+    const geometries = [];
+    root.traverse((node) => {
+      if (!node.isMesh || !node.geometry?.attributes?.position) return;
+      const geometry = node.geometry.clone();
+      geometry.applyMatrix4(node.matrixWorld);
+      geometry.deleteAttribute('tangent');
+      geometry.deleteAttribute('color');
+      if (!geometry.attributes.normal) geometry.computeVertexNormals();
+      geometries.push(geometry);
+    });
+    if (!geometries.length) return null;
+    const merged = mergeGeometries(geometries, false);
+    geometries.forEach((geometry) => geometry.dispose());
+    return merged ? normalizePetGeometry(merged) : null;
+  }
+
+  function usePetAsset(color, gltf) {
+    const root = gltf.scene;
+    petRoots.set(color, root);
+    const geometry = mergedPetGeometry(root);
+    if (!geometry) return;
+    const source = root.getObjectByProperty('isMesh', true);
+    const material = source?.material?.clone?.() || mats[color].clone();
+    material.roughness = 0.58;
+    material.metalness = 0.08;
+    material.envMapIntensity = 0.7;
+    if (color === BLACK && material.color) {
+      // 黑方仍保留猫咪的眼睛与轮廓,整体压到深蓝灰以保持两方一眼可分。
+      material.color.setHex(0x263844);
+    }
+    material.needsUpdate = true;
+    const ghostMaterial = material.clone();
+    ghostMaterial.transparent = true;
+    ghostMaterial.opacity = 0.64;
+    ghostMaterial.depthWrite = false;
+    ghostPetMats[color] = ghostMaterial;
+    pieceGeos[color] = geometry;
+    petMats[color] = material;
+    pieceInstances[color].geometry = geometry;
+    pieceInstances[color].material = material;
+    for (const piece of pieces) {
+      if (piece.color === color) {
+        piece.mesh.geometry = geometry;
+        piece.mesh.material = material;
+      }
+    }
+    if (color === BLACK) ghost.geometry = geometry;
+    rebuildPieceInstances();
+    renderHomePets();
+  }
+
+  function loadAsset(url, onLoad) {
+    loader.load(url, onLoad, undefined, () => {
+      // 素材缺失时保留程序化回退,不打断游戏启动。
+    });
+  }
+
+  function normalizeRoot(root, targetHeight = 1) {
+    root.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(root);
+    const size = new THREE.Vector3();
+    box.getSize(size);
+    if (size.y > 0) root.scale.multiplyScalar(targetHeight / size.y);
+    root.updateMatrixWorld(true);
+    const fitted = new THREE.Box3().setFromObject(root);
+    root.position.y += -fitted.min.y;
+  }
+
+  function renderHomePets() {
+    clearGroup(homePetsGroup);
+    const roots = [petRoots.get(BLACK), petRoots.get('fox') || petRoots.get(WHITE)];
+    homePetSlots.forEach((slot, index) => {
+      const source = roots[index];
+      if (!source) return;
+      const pet = source.clone(true);
+      normalizeRoot(pet, slot.scale);
+      pet.position.set(...slot.position);
+      pet.rotation.set(...slot.rotation);
+      pet.traverse((node) => {
+        if (node.isMesh) {
+          node.castShadow = true;
+          node.receiveShadow = true;
+        }
+      });
+      homePetsGroup.add(pet);
+    });
+  }
+
+  function refreshArenaDecor() {
+    if (!arenaTemplates.size) return;
+    makeArenaDecor(curSize);
+  }
+
+  loadAsset(PET_ASSETS[BLACK], (gltf) => usePetAsset(BLACK, gltf));
+  loadAsset(PET_ASSETS[WHITE], (gltf) => usePetAsset(WHITE, gltf));
+  loadAsset(HOME_FOX_ASSET, (gltf) => {
+    petRoots.set('fox', gltf.scene);
+    renderHomePets();
+  });
+  Object.entries(ARENA_ASSETS).forEach(([name, url]) => {
+    loadAsset(url, (gltf) => {
+      arenaTemplates.set(name, gltf.scene);
+      refreshArenaDecor();
+    });
+  });
 
   const legalMarkerGeo = new THREE.RingGeometry(0.11, 0.15, 16);
   legalMarkerGeo.rotateX(-Math.PI / 2);
@@ -585,6 +839,22 @@ export function buildScene(container) {
   legalFills.frustumCulled = false;
   legalFills.renderOrder = 2;
   pieceGroup.add(legalFills);
+
+  const directorMarker = new THREE.Mesh(
+    new THREE.TorusGeometry(0.31, 0.035, 8, 28),
+    new THREE.MeshBasicMaterial({
+      color: ACCENT,
+      transparent: true,
+      opacity: 0.95,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    })
+  );
+  directorMarker.rotation.x = -Math.PI / 2;
+  directorMarker.position.y = CELL_Y + 0.045;
+  directorMarker.visible = false;
+  directorMarker.renderOrder = 4;
+  pieceGroup.add(directorMarker);
 
   // 最后落子标记:棋子顶部的细金属光环。
   const lastMarker = new THREE.Mesh(
@@ -656,6 +926,16 @@ export function buildScene(container) {
     legalMarkers.count = 0;
     legalFills.count = 0;
     ghost.visible = false;
+    directorMarker.visible = false;
+  }
+
+  function setDirectorTarget(cell = null) {
+    if (!cell) {
+      directorMarker.visible = false;
+      return;
+    }
+    directorMarker.visible = true;
+    directorMarker.position.set(cellX(cell.c), CELL_Y + 0.045, cellZ(cell.r));
   }
 
   function hover(r, c, color) {
@@ -664,7 +944,8 @@ export function buildScene(container) {
       return;
     }
     ghost.visible = true;
-    ghost.material = ghostMats[color];
+    ghost.geometry = pieceGeos[color] || fallbackPieceGeo;
+    ghost.material = ghostPetMats[color] || ghostMats[color];
     ghost.position.set(cellX(c), CELL_Y + 0.07, cellZ(r));
   }
 
@@ -943,6 +1224,11 @@ export function buildScene(container) {
     // 静态画面下除了补间/粒子外不做任何周期性变化,从根源上杜绝频闪。
     tweens.update(dt);
     burst.update(dt);
+    if (directorMarker.visible && !reduceMotion.matches) {
+      const pulse = 1 + Math.sin(time * 4.2) * 0.12;
+      directorMarker.scale.setScalar(pulse);
+      directorMarker.material.opacity = 0.7 + (Math.sin(time * 4.2) + 1) * 0.13;
+    }
     // 主页只做小幅摆动,持续保留正面构图;进入游戏后平滑归零。
     if (reduceMotion.matches) {
       boardGroup.rotation.y = 0;
@@ -977,6 +1263,10 @@ export function buildScene(container) {
     applyRenderQuality(curSize);
     renderer.setSize(window.innerWidth, window.innerHeight);
     fitCamera(curSize); // 旋转屏幕/改变窗口后重新构图
+    if (idleMode) {
+      camera.position.multiplyScalar(1.12);
+      boardGroup.position.y = 0;
+    }
   }
   window.addEventListener('resize', resize);
 
@@ -989,7 +1279,18 @@ export function buildScene(container) {
 
   let idleMode = false;
   function setIdleMode(on) {
+    if (idleMode === on) return;
     idleMode = on;
+    homePetsGroup.visible = on;
+    decorGroup.visible = true;
+    boardGroup.scale.setScalar(on ? 0.84 : 1);
+    boardGroup.position.y = 0;
+    if (on) {
+      camera.position.multiplyScalar(1.12);
+      controls.target.set(0, 0.1, 0);
+    } else {
+      fitCamera(curSize);
+    }
     if (reduceMotion.matches) boardGroup.rotation.y = 0;
   }
 
@@ -1008,6 +1309,7 @@ export function buildScene(container) {
     ghost,
     setLegal,
     clearLegal,
+    setDirectorTarget,
     setIdleMode,
     hover,
     placePiece,

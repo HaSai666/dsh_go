@@ -90,6 +90,7 @@ export class UI {
         </select>
         <button id="btn-undo" class="tool-button" type="button" title="悔棋 (U)"><i data-lucide="undo-2"></i><span>悔棋</span></button>
         <button id="btn-restart" class="tool-button" type="button" title="重新开始 (R)"><i data-lucide="rotate-ccw"></i><span>重开</span></button>
+        <button id="btn-tutorial" class="tool-button" type="button" title="重新观看指引"><i data-lucide="sparkles"></i><span>指引</span></button>
         <button id="btn-mute" class="tool-button" type="button" title="音效 (M)" aria-label="静音" aria-pressed="false"><i data-lucide="volume-2"></i><span>音效</span></button>
         <button id="btn-home" class="tool-button" type="button" title="返回主页"><i data-lucide="house"></i><span>主页</span></button>
       </div>
@@ -97,6 +98,11 @@ export class UI {
       <div id="move-feedback" class="move-feedback" role="status" aria-live="polite" aria-atomic="true">
         <b id="move-grade"></b><span id="move-detail"></span>
       </div>
+      <aside id="director" class="director hidden" role="region" aria-label="导演式新手指引" aria-live="polite" aria-atomic="true">
+        <div class="director-head"><span id="director-kicker" class="director-kicker">导演指引</span><span id="director-progress" class="director-progress"></span></div>
+        <div class="director-body"><span id="director-mark" class="director-mark" aria-hidden="true">✦</span><div><h2 id="director-title"></h2><p id="director-copy"></p></div></div>
+        <div class="director-actions"><button id="director-next" class="btn-primary" type="button">继续</button><button id="director-skip" class="director-skip" type="button">跳过指引</button></div>
+      </aside>
       <div id="cardbar" class="cardbar hidden">
         <div class="cardbar-head">
           <div id="cardbar-label" class="cardbar-label"></div>
@@ -138,6 +144,7 @@ export class UI {
       diff: document.getElementById('sel-diff'),
       undo: document.getElementById('btn-undo'),
       restart: document.getElementById('btn-restart'),
+      tutorial: document.getElementById('btn-tutorial'),
       mute: document.getElementById('btn-mute'),
       home: document.getElementById('btn-home'),
       toast: document.getElementById('toast'),
@@ -151,6 +158,14 @@ export class UI {
       moveFeedback: document.getElementById('move-feedback'),
       moveGrade: document.getElementById('move-grade'),
       moveDetail: document.getElementById('move-detail'),
+      director: document.getElementById('director'),
+      directorKicker: document.getElementById('director-kicker'),
+      directorProgress: document.getElementById('director-progress'),
+      directorMark: document.getElementById('director-mark'),
+      directorTitle: document.getElementById('director-title'),
+      directorCopy: document.getElementById('director-copy'),
+      directorNext: document.getElementById('director-next'),
+      directorSkip: document.getElementById('director-skip'),
       overlay: document.getElementById('overlay'),
       overTitle: document.getElementById('over-title'),
       overScore: document.getElementById('over-score'),
@@ -174,6 +189,8 @@ export class UI {
     this._toastTimer = null;
     this._moveFeedbackTimer = null;
     this._activeDialog = null;
+    this._director = null;
+    this._directorTarget = null;
 
     const savedDifficulty = localStorage.getItem('othello3d-difficulty');
     if (['easy', 'normal', 'hard'].includes(savedDifficulty)) {
@@ -262,6 +279,101 @@ export class UI {
     this.els.undo.disabled = locked;
     this.els.restart.disabled = locked;
     this.els.diff.disabled = locked;
+  }
+
+  // ---------- 导演式新手指引 ----------
+
+  tutorialKey(mode) {
+    return mode === 'cards' ? 'othello3d-tutorial-cards' : 'othello3d-tutorial-classic';
+  }
+
+  startDirector(mode, steps, { force = false } = {}) {
+    if (!force && localStorage.getItem(this.tutorialKey(mode)) === '1') return false;
+    this._director = { mode, steps, index: 0, actionDone: false };
+    this.els.director.classList.remove('hidden');
+    this.els.director.dataset.mode = mode;
+    this.renderDirector();
+    return true;
+  }
+
+  renderDirector() {
+    const director = this._director;
+    if (!director?.steps?.length) return;
+    const step = director.steps[director.index];
+    this.els.directorKicker.textContent = step.kicker || '导演指引';
+    this.els.directorProgress.textContent = `${director.index + 1} / ${director.steps.length}`;
+    this.els.directorMark.textContent = step.mark || (step.action === 'card' ? '卡' : step.action === 'board' || step.action === 'move' ? '点' : '✦');
+    this.els.directorTitle.textContent = step.title;
+    this.els.directorCopy.textContent = step.copy;
+    const actionStep = Boolean(step.action);
+    this.els.directorNext.hidden = actionStep;
+    this.els.directorNext.textContent = step.nextLabel || '继续';
+    this.els.directorSkip.textContent = step.skipLabel || '跳过指引';
+    this.applyDirectorTarget();
+    this._onDirectorStep?.(step, director.index);
+  }
+
+  applyDirectorTarget() {
+    document.querySelectorAll('.director-target').forEach((el) => el.classList.remove('director-target'));
+    const target = this._directorTarget;
+    if (!target || !this._director) return;
+    if (target.type === 'card' && target.id) {
+      const card = [...this.els.cardCards.querySelectorAll('.card')].find((el) => el.dataset.id === target.id);
+      card?.classList.add('director-target');
+    }
+  }
+
+  setDirectorTarget(target = null) {
+    this._directorTarget = target;
+    this.applyDirectorTarget();
+  }
+
+  directorAction(action, payload = null) {
+    const director = this._director;
+    const step = director?.steps?.[director.index];
+    if (!director || !step || step.action !== action) return false;
+    director.actionDone = true;
+    this._onDirectorAction?.(action, payload, step, director.index);
+    return true;
+  }
+
+  advanceDirector({ force = false } = {}) {
+    const director = this._director;
+    const step = director?.steps?.[director.index];
+    if (!director || !step) return false;
+    if (step.action && !director.actionDone && !force) return false;
+    director.index += 1;
+    director.actionDone = false;
+    if (director.index >= director.steps.length) {
+      this.finishDirector();
+    } else {
+      this.renderDirector();
+    }
+    return true;
+  }
+
+  finishDirector(markSeen = true, notify = true) {
+    if (!this._director) return;
+    if (markSeen) localStorage.setItem(this.tutorialKey(this._director.mode), '1');
+    this._director = null;
+    this._directorTarget = null;
+    this.els.director.classList.add('hidden');
+    this.applyDirectorTarget();
+    if (notify) this._onDirectorFinish?.();
+  }
+
+  skipDirector() {
+    if (!this._director) return;
+    this.finishDirector(true);
+    this._onDirectorSkip?.();
+  }
+
+  isDirectorActive() {
+    return Boolean(this._director);
+  }
+
+  directorStep() {
+    return this._director?.steps?.[this._director.index] || null;
   }
 
   getDifficulty() {
@@ -401,10 +513,13 @@ export class UI {
             if (this.selectedCardEnergy() + meta.cost > this.cardEnergyMax) {
               this.toast(`行动力不足:「${meta.name}」需要 ${meta.cost} 点`);
               return;
-            }
-            this.cardQueue.push(idx);
+          }
+          this.cardQueue.push(idx);
           }
           this.renderHand(this._lastHand, this._lastSelectable, idx);
+          if (this.cardQueue.length > 0) {
+            this.directorAction('card', { id, index: idx, selected: true });
+          }
         });
       } else {
         btn.classList.add('disabled');
@@ -418,6 +533,7 @@ export class UI {
     });
     this.renderCardEnergy(usedEnergy);
     refreshIcons();
+    this.applyDirectorTarget();
     this.els.cardLabel.textContent = selectable
       ? `你的手牌 · 已用 ${usedEnergy}/${this.cardEnergyMax}${this.cardEnergyHint ? ` · ${this.cardEnergyHint}` : ''} · 按触发顺序选牌`
       : '你的手牌 · 动画结算中…';
@@ -528,6 +644,7 @@ export class UI {
   // ---------- 主页 ----------
 
   showHome(focusMode = false) {
+    this.finishDirector(false, false);
     this.homeEl.classList.remove('hidden');
     this.els.hud.classList.add('inactive');
     this.els.hud.setAttribute('aria-hidden', 'true');
@@ -563,6 +680,7 @@ export class UI {
     [...this.el.children].forEach((child) => {
       if (child !== dialog) child.inert = true;
     });
+    focusTarget?.focus();
     requestAnimationFrame(() => focusTarget?.focus());
   }
 
@@ -626,5 +744,29 @@ export class UI {
 
   onAgain(cb) {
     this.els.again.addEventListener('click', cb);
+  }
+
+  onDirectorContinue(cb) {
+    this.els.directorNext.addEventListener('click', cb);
+  }
+
+  onDirectorSkip(cb) {
+    this.els.directorSkip.addEventListener('click', cb);
+  }
+
+  onDirectorAction(cb) {
+    this._onDirectorAction = cb;
+  }
+
+  onDirectorStep(cb) {
+    this._onDirectorStep = cb;
+  }
+
+  onDirectorFinish(cb) {
+    this._onDirectorFinish = cb;
+  }
+
+  onTutorialReplay(cb) {
+    this.els.tutorial.addEventListener('click', cb);
   }
 }

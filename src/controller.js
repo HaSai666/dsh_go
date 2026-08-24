@@ -76,6 +76,9 @@ export class Game {
     this.startingPlayer = BLACK;
     this.movesPlayed = { [BLACK]: 0, [WHITE]: 0 };
     this.currentCardEnergy = 0;
+    this.tutorialPaused = false;
+    this.tutorialPendingTurn = null;
+    this.tutorialTarget = null;
 
     const dom = ctx.renderer.domElement;
     dom.tabIndex = 0;
@@ -135,6 +138,12 @@ export class Game {
       if (accepted) this.nextLevel();
       return accepted;
     });
+    ui.onDirectorContinue(() => this.continueTutorial());
+    ui.onDirectorSkip(() => this.skipTutorial());
+    ui.onDirectorAction((action, payload) => this.handleTutorialAction(action, payload));
+    ui.onDirectorStep((step) => this.handleDirectorStep(step));
+    ui.onDirectorFinish(() => this.finishTutorial());
+    ui.onTutorialReplay(() => this.replayTutorial());
 
     this.difficulty = ui.getDifficulty();
   }
@@ -172,6 +181,180 @@ export class Game {
     this.ui.setShield(null);
     this.ui.showHome(true);
     this.audio.click();
+  }
+
+  classicTutorialSteps() {
+    return [
+      {
+        id: 'goal',
+        kicker: '经典模式 · 1',
+        title: '先学会夹击',
+        copy: '你的棋子要把对手棋子夹在两端。夹住的棋子会翻成你的颜色,棋盘上最后谁的棋子多谁赢。',
+        mark: '1',
+      },
+      {
+        id: 'move',
+        kicker: '经典模式 · 2',
+        title: '跟着发光圈落子',
+        copy: '发光格就是合法落点。先看橙色指环,再点击任意一个发光格试试。',
+        action: 'move',
+        mark: '点',
+      },
+      {
+        id: 'flip',
+        kicker: '经典模式 · 3',
+        title: '看,中间的棋子翻面了',
+        copy: '落子后,被两端夹住的棋子会连锁翻面。这就是黑白棋最核心的一步。',
+        mark: '翻',
+      },
+      {
+        id: 'corner',
+        kicker: '经典模式 · 4',
+        title: '角落是安全位置',
+        copy: '角落没有相邻外侧,一旦占住就不会再被翻回。中盘先争角,通常比贪多翻几子更重要。',
+        mark: '角',
+      },
+      {
+        id: 'ready',
+        kicker: '经典模式 · 完成',
+        title: '现在可以自己下了',
+        copy: '继续点击发光格落子。棋盘、比分和翻面动画会一直告诉你发生了什么。',
+        mark: 'GO',
+        nextLabel: '开始对局',
+      },
+    ];
+  }
+
+  cardsTutorialSteps() {
+    return [
+      {
+        id: 'goal',
+        kicker: '无尽卡牌 · 1',
+        title: '边下棋,边用战术牌',
+        copy: '先用普通落子夹击棋子,再把卡牌排成一条小连招。行动力用完前,你可以按顺序选多张牌。',
+        mark: '1',
+      },
+      {
+        id: 'card',
+        kicker: '无尽卡牌 · 2',
+        title: '先选一张低费牌',
+        copy: '橙色边框标出建议牌。点击它,卡牌会出现序号,代表触发顺序。',
+        action: 'card',
+        mark: '卡',
+      },
+      {
+        id: 'board',
+        kicker: '无尽卡牌 · 3',
+        title: '再点一个发光格',
+        copy: '选牌后,点击棋盘上的合法格。棋子先落下,随后卡牌效果会依次结算。',
+        action: 'board',
+        mark: '点',
+      },
+      {
+        id: 'combo',
+        kicker: '无尽卡牌 · 4',
+        title: '顺序就是策略',
+        copy: '先用爆裂或播种铺路,再接回响复制上一张;连击会给你额外一手,但行动力会变少。',
+        mark: '链',
+      },
+      {
+        id: 'loot',
+        kicker: '无尽卡牌 · 5',
+        title: '赢下这一关,挑一件战利品',
+        copy: '过关后会出现三选一:新卡、遗物或手牌上限。选完立刻进入下一关,整局没有固定终点。',
+        mark: '奖',
+      },
+      {
+        id: 'ready',
+        kicker: '无尽卡牌 · 完成',
+        title: '准备好冲下一关',
+        copy: '每关都很短,但对手会逐渐获得特权。留意行动力和角落,三分钟内就能完成一局。',
+        mark: 'GO',
+        nextLabel: '开始闯关',
+      },
+    ];
+  }
+
+  beginTutorial(force = false) {
+    this.tutorialPaused = false;
+    this.tutorialPendingTurn = null;
+    this.tutorialTarget = null;
+    if (this.mode === 'cards') {
+      this.tutorialTarget = this.hands[BLACK].includes('seed')
+        ? 'seed'
+        : this.hands[BLACK][0] || null;
+    }
+    const started = this.ui.startDirector(
+      this.mode,
+      this.mode === 'cards' ? this.cardsTutorialSteps() : this.classicTutorialSteps(),
+      { force }
+    );
+    if (started) {
+      this.handleDirectorStep(this.ui.directorStep());
+    } else {
+      this.ctx.setDirectorTarget(null);
+      this.ui.setDirectorTarget(null);
+    }
+    return started;
+  }
+
+  handleDirectorStep(step) {
+    if (!step || !this.ui.isDirectorActive()) {
+      this.ctx.setDirectorTarget(null);
+      this.ui.setDirectorTarget(null);
+      return;
+    }
+    if (step.action === 'card') {
+      this.ctx.setDirectorTarget(null);
+      this.ui.setDirectorTarget({ type: 'card', id: this.tutorialTarget || this.hands[BLACK][0] });
+      return;
+    }
+    this.ui.setDirectorTarget(null);
+    if (step.action === 'move' || step.action === 'board') {
+      const [r, c] = this.legal[0] || [];
+      if (Number.isInteger(r) && Number.isInteger(c)) this.ctx.setDirectorTarget({ r, c });
+      else this.ctx.setDirectorTarget(null);
+    } else {
+      this.ctx.setDirectorTarget(null);
+    }
+  }
+
+  handleTutorialAction(action) {
+    const step = this.ui.directorStep();
+    if (!step || step.action !== action) return;
+    if (action === 'card') {
+      // 选牌完成后立即把导演镜头交给棋盘。
+      this.ui.advanceDirector();
+    }
+  }
+
+  continueTutorial() {
+    if (!this.ui.isDirectorActive()) return;
+    const step = this.ui.directorStep();
+    if (step?.action) return;
+    this.ui.advanceDirector();
+  }
+
+  skipTutorial() {
+    if (this.ui.isDirectorActive()) this.ui.skipDirector();
+  }
+
+  finishTutorial() {
+    this.ctx.setDirectorTarget(null);
+    this.ui.setDirectorTarget(null);
+    if (!this.tutorialPaused || !this.tutorialPendingTurn) return;
+    const nextTurn = this.tutorialPendingTurn;
+    this.tutorialPaused = false;
+    this.tutorialPendingTurn = null;
+    this.turn = nextTurn;
+    this.phase = 'idle';
+    this.ui.setLocked(false);
+    this.refreshLegal();
+  }
+
+  replayTutorial() {
+    if (this.mode !== 'classic' && this.mode !== 'cards') return;
+    this.newGame({ tutorialForce: true });
   }
 
   // ---------- 肉鸽闯关 ----------
@@ -235,7 +418,7 @@ export class Game {
   // ---------- 输入 ----------
 
   handleClick(event) {
-    if (this.phase !== 'idle' || this.turn !== BLACK) return;
+    if (this.phase !== 'idle' || this.turn !== BLACK || this.tutorialPaused) return;
     const cell = this.ctx.cellFromPointer(event);
     if (!cell) return;
     if (this.legal.some(([r, c]) => r === cell.r && c === cell.c)) {
@@ -247,18 +430,23 @@ export class Game {
   }
 
   commitPlayerMove(r, c) {
+    if (this.tutorialPaused) return;
     const cards = this.ui.getSelectedCards();
     if (this.mode === 'cards' && cardEnergy(cards) > this.currentCardEnergy) {
       this.ui.toast('选牌超过本回合行动力');
       this.audio.error();
       return;
     }
+    const tutorialStep = this.ui.directorStep();
+    if (tutorialStep?.action === 'move' || tutorialStep?.action === 'board') {
+      this.ui.directorAction(tutorialStep.action, { r, c, cards });
+    }
     this.ui.clearCardSelection();
     this.commitMove(r, c, BLACK, cards);
   }
 
   handleBoardKey(event) {
-    if (this.phase !== 'idle' || this.turn !== BLACK || this.legal.length === 0) return false;
+    if (this.phase !== 'idle' || this.turn !== BLACK || this.tutorialPaused || this.legal.length === 0) return false;
     if (['ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp'].includes(event.key)) {
       event.preventDefault();
       const direction = event.key === 'ArrowRight' || event.key === 'ArrowDown' ? 1 : -1;
@@ -277,7 +465,7 @@ export class Game {
   }
 
   previewKeyboardMove(announce = true) {
-    if (this.phase !== 'idle' || this.turn !== BLACK || !this.legal.length) return;
+    if (this.phase !== 'idle' || this.turn !== BLACK || this.tutorialPaused || !this.legal.length) return;
     this.keyboardMoveIndex = Math.min(this.keyboardMoveIndex, this.legal.length - 1);
     const [r, c] = this.legal[this.keyboardMoveIndex];
     this.ctx.hover(r, c, BLACK);
@@ -291,6 +479,7 @@ export class Game {
     const ok =
       this.phase === 'idle' &&
       this.turn === BLACK &&
+      !this.tutorialPaused &&
       cell &&
       this.legal.some(([r, c]) => r === cell.r && c === cell.c);
     if (ok) {
@@ -354,9 +543,12 @@ export class Game {
 
   // ---------- 对局 ----------
 
-  newGame() {
+  newGame({ tutorialForce = false } = {}) {
     this.generation++;
     this.trace = [];
+    this.tutorialPaused = false;
+    this.tutorialPendingTurn = null;
+    this.tutorialTarget = null;
     // 经典模式固定 12×12;无尽模式使用 8~10 格快局与富开局。
     const size = this.mode === 'cards' && this.run ? boardSizeFor(this.run.level) : 12;
     this.board =
@@ -377,6 +569,13 @@ export class Game {
       // 开局补满双方手牌(上限:玩家 handCap / 敌方 4+特权)
       this.refill(BLACK, true);
       this.refill(WHITE, true);
+      const needsCardTutorial =
+        tutorialForce || localStorage.getItem('othello3d-tutorial-cards') !== '1';
+      if (needsCardTutorial && !this.hands[BLACK].includes('seed')) {
+        const cap = this.handCapFor(BLACK);
+        if (this.hands[BLACK].length >= cap) this.hands[BLACK].pop();
+        this.hands[BLACK].push('seed');
+      }
       // 敌方开局加子特权:从预设边线位依次放置(避开开局阵型)
       const cfg = this.runCfg();
       const spots = extraSpotsFor(size);
@@ -413,13 +612,16 @@ export class Game {
     this.ui.clearCardSelection();
     this.updateScore();
     this.refreshLegal(true);
+    const tutorialStarted = this.beginTutorial(tutorialForce);
     this.ctx.renderer.domElement.focus({ preventScroll: true });
     this.audio.click();
-    this.ui.toast(
-      this.mode === 'cards'
-        ? `第 ${this.run.level} 关 · 开局 ${this.handCapFor(BLACK)} 张 · 此后每回合抽 1 张 · 先手行动力 1`
-        : '新的一局,黑棋先行'
-    );
+    if (!tutorialStarted) {
+      this.ui.toast(
+        this.mode === 'cards'
+          ? `第 ${this.run.level} 关 · 开局 ${this.handCapFor(BLACK)} 张 · 此后每回合抽 1 张 · 先手行动力 1`
+          : '新的一局,黑棋先行'
+      );
+    }
   }
 
   async commitMove(r, c, player, cards = []) {
@@ -557,6 +759,20 @@ export class Game {
     this.updateScore();
     if (isGameOver(this.board)) {
       this.endGame();
+      return;
+    }
+
+    const directorStep = this.ui.directorStep();
+    if (
+      player === BLACK &&
+      (directorStep?.action === 'move' || directorStep?.action === 'board')
+    ) {
+      this.tutorialPaused = true;
+      this.tutorialPendingTurn = extraTurn ? BLACK : WHITE;
+      this.phase = 'idle';
+      this.ui.setLocked(true);
+      this.ui.advanceDirector();
+      this.setTurnUi();
       return;
     }
 
@@ -868,7 +1084,7 @@ export class Game {
   }
 
   undo() {
-    if (this.phase !== 'idle' || this.turn !== BLACK) return;
+    if (this.phase !== 'idle' || this.turn !== BLACK || this.tutorialPaused) return;
     if (this.history.length === 0) {
       this.ui.toast('没有可悔的棋');
       this.audio.error();
@@ -913,7 +1129,9 @@ export class Game {
   }
 
   setTurnUi() {
-    if (this.phase === 'ai') {
+    if (this.tutorialPaused) {
+      this.ui.setTurn('跟着导演提示', false);
+    } else if (this.phase === 'ai') {
       this.ui.setTurn('电脑思考中', true);
     } else if (this.phase === 'over') {
       this.ui.setTurn('对局结束');

@@ -56,7 +56,7 @@ function ringMean(png, cx, cy, r0, r1) {
 }
 
 function globalStats(png) {
-  let Lsum = 0, n = 0, white = 0, green = 0, dark = 0;
+  let Lsum = 0, n = 0, white = 0, arenaBlue = 0, dark = 0;
   for (let y = 0; y < png.height; y += 4) {
     for (let x = 0; x < png.width; x += 4) {
       const [r, g, b] = px(png, x, y);
@@ -64,14 +64,14 @@ function globalStats(png) {
       Lsum += L;
       n++;
       if (L > 150 && r > 135 && g > 135 && b > 115) white++;
-      if (g > r + 10 && g > b + 10 && L > 30 && L < 170) green++;
+      if (b > r + 12 && b >= g - 2 && L > 30 && L < 190) arenaBlue++;
       if (L < 45) dark++;
     }
   }
   return {
     meanL: Lsum / n,
     whitePct: (white / n) * 100,
-    greenPct: (green / n) * 100,
+    arenaBluePct: (arenaBlue / n) * 100,
     darkPct: (dark / n) * 100,
   };
 }
@@ -98,11 +98,11 @@ const P = Math.abs(meta.cells['6,5'].y - meta.cells['5,5'].y);
 // ① 全局亮度与色彩构成
 for (const [name, img] of [['初始', c01], ['中局', c07], ['大翻盘', c08]]) {
   const s = globalStats(img);
-  info(`全局(${name})`, `亮度 ${s.meanL.toFixed(1)} | 白子 ${s.whitePct.toFixed(1)}% | 棋盘绿 ${s.greenPct.toFixed(1)}% | 暗部 ${s.darkPct.toFixed(1)}%`);
+  info(`全局(${name})`, `亮度 ${s.meanL.toFixed(1)} | 白子 ${s.whitePct.toFixed(1)}% | 竞技场蓝灰 ${s.arenaBluePct.toFixed(1)}% | 暗部 ${s.darkPct.toFixed(1)}%`);
 }
 const s0 = globalStats(c01);
 check('整体亮度适中(35~125)', s0.meanL > 35 && s0.meanL < 125, `均值 ${s0.meanL.toFixed(1)}`);
-check('棋盘绿色可见(>8%)', s0.greenPct > 8, `${s0.greenPct.toFixed(1)}%`);
+check('竞技场蓝灰材质可见(>8%)', s0.arenaBluePct > 8, `${s0.arenaBluePct.toFixed(1)}%`);
 check('白色棋子可见(>0.4%)', s0.whitePct > 0.4, `${s0.whitePct.toFixed(1)}%`);
 
 // ② 棋子对比度(12×12:白子 (5,5),黑子 (6,5))

@@ -1,16 +1,16 @@
 :root {
-  --ink: #070a09;
-  --ink-soft: #0d1311;
-  --panel: rgb(9 14 12 / 0.95);
-  --panel-solid: #0c1210;
-  --paper: #f4f0e5;
-  --muted: #aeb8b1;
+  --ink: #07101a;
+  --ink-soft: #0d1a28;
+  --panel: rgb(10 21 32 / 0.95);
+  --panel-solid: #0d1a28;
+  --paper: #eef4f4;
+  --muted: #a8b9c2;
   --line: rgb(255 255 255 / 0.13);
   --line-strong: rgb(255 255 255 / 0.24);
   --gold: #f2bd63;
   --gold-strong: #ffd487;
-  --green: #35b779;
-  --focus: #ffe09a;
+  --green: #63d5ae;
+  --focus: #ffd7a2;
   --danger: #f07167;
   --radius: 8px;
 }
@@ -88,8 +88,8 @@ select:focus-visible,
   content: "";
   pointer-events: none;
   background:
-    linear-gradient(180deg, rgb(1 4 3 / 0.5), transparent 23%, transparent 70%, rgb(1 4 3 / 0.48)),
-    radial-gradient(ellipse at center, transparent 48%, rgb(0 0 0 / 0.38) 100%);
+    linear-gradient(180deg, rgb(3 8 14 / 0.58), transparent 25%, transparent 72%, rgb(2 7 13 / 0.6)),
+    radial-gradient(ellipse at center, transparent 46%, rgb(0 0 0 / 0.42) 100%);
 }
 
 #app canvas {
@@ -144,9 +144,22 @@ svg {
     max(clamp(36px, 8vw, 124px), env(safe-area-inset-left));
   pointer-events: auto;
   background:
-    linear-gradient(90deg, rgb(3 7 5 / 0.9) 0%, rgb(3 7 5 / 0.68) 28%, rgb(3 7 5 / 0.12) 60%),
-    linear-gradient(180deg, rgb(3 7 5 / 0.08), rgb(3 7 5 / 0.28));
+    linear-gradient(90deg, rgb(4 10 17 / 0.96) 0%, rgb(4 10 17 / 0.78) 28%, rgb(4 10 17 / 0.22) 63%, transparent 86%),
+    linear-gradient(180deg, rgb(4 10 17 / 0.1), rgb(4 10 17 / 0.34));
   transition: opacity 0.34s ease;
+}
+
+.home::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  pointer-events: none;
+  opacity: 0.16;
+  background-image:
+    linear-gradient(90deg, rgb(255 255 255 / 0.08) 1px, transparent 1px),
+    linear-gradient(180deg, rgb(255 255 255 / 0.06) 1px, transparent 1px);
+  background-size: 72px 72px;
+  mask-image: linear-gradient(90deg, #000 0%, transparent 74%);
 }
 
 .home.hidden {
@@ -155,6 +168,8 @@ svg {
 }
 
 .home-inner {
+  position: relative;
+  z-index: 1;
   width: min(100%, 410px);
   text-align: left;
   animation: home-in 0.44s cubic-bezier(0.2, 0.75, 0.25, 1) both;
@@ -220,9 +235,29 @@ svg {
 
 .home-sub {
   margin-bottom: 4px;
-  color: rgb(244 240 229 / 0.5);
+  color: rgb(238 244 244 / 0.56);
   font-size: 11px;
   font-weight: 650;
+}
+
+.home-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 9px;
+  color: var(--gold-strong);
+  font-size: 10px;
+  font-weight: 760;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.home-kicker::before {
+  width: 22px;
+  height: 2px;
+  content: "";
+  background: var(--gold);
+  box-shadow: 0 0 12px rgb(242 189 99 / 0.55);
 }
 
 .mode-cards {
@@ -326,6 +361,14 @@ svg {
   margin-top: 20px;
   color: rgb(244 240 229 / 0.43);
   font-size: 11px;
+}
+
+.home-note {
+  max-width: 31ch;
+  margin-top: 22px;
+  color: rgb(238 244 244 / 0.52);
+  font-size: 12px;
+  line-height: 1.55;
 }
 
 .home-status span {
@@ -688,6 +731,134 @@ svg {
   100% {
     opacity: 0;
     transform: translate(-50%, -10px) scale(1.01);
+  }
+}
+
+/* Director tutorial: a small non-modal cue that leaves the board tappable. */
+.director {
+  position: absolute;
+  z-index: 24;
+  bottom: 22px;
+  left: 20px;
+  width: min(354px, calc(100vw - 40px));
+  padding: 13px 15px 12px;
+  pointer-events: none;
+  border: 1px solid rgb(242 189 99 / 0.36);
+  border-left: 3px solid var(--gold);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgb(242 189 99 / 0.1), transparent 42%),
+    rgb(8 17 27 / 0.94);
+  box-shadow: 0 18px 46px rgb(0 0 0 / 0.46), inset 0 1px 0 rgb(255 255 255 / 0.07);
+  backdrop-filter: blur(12px);
+}
+
+.director.hidden {
+  display: none;
+}
+
+.director-head,
+.director-actions,
+.director-body {
+  display: flex;
+  align-items: center;
+}
+
+.director-head {
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 9px;
+}
+
+.director-kicker {
+  color: var(--gold-strong);
+  font-size: 10px;
+  font-weight: 760;
+  letter-spacing: 0.05em;
+}
+
+.director-progress {
+  color: rgb(238 244 244 / 0.42);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.director-body {
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.director-mark {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 31px;
+  height: 31px;
+  color: #1a1309;
+  font-size: 11px;
+  font-weight: 850;
+  border-radius: 8px;
+  background: var(--gold);
+  box-shadow: 0 5px 14px rgb(242 189 99 / 0.22);
+}
+
+.director-body h2 {
+  margin-bottom: 4px;
+  color: var(--paper);
+  font-size: 15px;
+  line-height: 1.25;
+  font-weight: 780;
+}
+
+.director-body p {
+  color: rgb(238 244 244 / 0.66);
+  font-size: 11.5px;
+  line-height: 1.52;
+}
+
+.director-actions {
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 12px;
+  pointer-events: auto;
+}
+
+.director-actions .btn-primary {
+  height: 31px;
+  padding: 0 16px;
+  font-size: 12px;
+}
+
+.director-skip {
+  height: 30px;
+  padding: 0 2px;
+  color: rgb(238 244 244 / 0.48);
+  font-size: 10.5px;
+  cursor: pointer;
+  border: 0;
+  background: transparent;
+}
+
+.director-skip:hover {
+  color: var(--paper);
+}
+
+.card.director-target {
+  z-index: 5;
+  border-color: var(--gold-strong);
+  box-shadow:
+    0 0 0 2px rgb(242 189 99 / 0.42),
+    0 0 26px rgb(242 189 99 / 0.28),
+    0 14px 28px rgb(0 0 0 / 0.5);
+  animation: director-card-pulse 1.25s ease-in-out infinite;
+}
+
+@keyframes director-card-pulse {
+  50% {
+    box-shadow:
+      0 0 0 3px rgb(242 189 99 / 0.26),
+      0 0 32px rgb(242 189 99 / 0.36),
+      0 14px 28px rgb(0 0 0 / 0.5);
   }
 }
 
@@ -1238,15 +1409,19 @@ svg {
 
 @media (max-width: 760px) {
   .home {
-    align-items: center;
+    align-items: flex-start;
     padding:
       max(20px, env(safe-area-inset-top))
       max(22px, env(safe-area-inset-right))
       max(20px, env(safe-area-inset-bottom))
       max(22px, env(safe-area-inset-left));
     background:
-      linear-gradient(90deg, rgb(3 7 5 / 0.84), rgb(3 7 5 / 0.42)),
-      linear-gradient(180deg, rgb(3 7 5 / 0.08), rgb(3 7 5 / 0.34));
+      linear-gradient(90deg, rgb(4 10 17 / 0.62), rgb(4 10 17 / 0.12)),
+      linear-gradient(180deg, rgb(4 10 17 / 0.03), rgb(4 10 17 / 0.16));
+  }
+
+  .home-inner {
+    margin-top: 50px;
   }
 
   .home-inner {
@@ -1265,6 +1440,11 @@ svg {
   .home-sub {
     margin-bottom: 3px;
     font-size: 10px;
+  }
+
+  .home-kicker {
+    margin-bottom: 7px;
+    font-size: 9px;
   }
 
   .home-brand {
@@ -1295,6 +1475,10 @@ svg {
   .home-status {
     margin-top: 16px;
     font-size: 10px;
+  }
+
+  .home-note {
+    display: none;
   }
 
   .top-left {
@@ -1481,6 +1665,43 @@ svg {
     font-size: 10px;
   }
 
+  .director {
+    top: 57px;
+    right: 8px;
+    bottom: auto;
+    left: 8px;
+    width: auto;
+    padding: 9px 10px 8px;
+  }
+
+  .director-head {
+    margin-bottom: 6px;
+  }
+
+  .director-mark {
+    width: 26px;
+    height: 26px;
+    font-size: 9px;
+  }
+
+  .director-body h2 {
+    font-size: 12px;
+  }
+
+  .director-body p {
+    font-size: 10px;
+    line-height: 1.42;
+  }
+
+  .director-actions {
+    margin-top: 7px;
+  }
+
+  .director-actions .btn-primary {
+    height: 28px;
+    font-size: 11px;
+  }
+
   .hint {
     display: none;
   }
@@ -1546,11 +1767,23 @@ svg {
   }
 
   .cardbar {
-    bottom: 48px;
+    bottom: 8px;
+  }
+
+  .director {
+    top: 72px;
+    right: auto;
+    bottom: auto;
+    left: 8px;
+    width: min(300px, calc(100vw - 16px));
   }
 
   .cardbar-cards {
     flex-wrap: nowrap;
+  }
+
+  .hint {
+    display: none;
   }
 }
 
