@@ -154,6 +154,19 @@ function makeSkyTexture(renderer) {
   context.fillStyle = haze;
   context.fillRect(0, 360, canvas.width, 408);
 
+  const distantCloud = (x, y, scale, opacity) => {
+    context.fillStyle = `rgba(255, 231, 208, ${opacity})`;
+    context.beginPath();
+    context.ellipse(x, y, 82 * scale, 20 * scale, 0, 0, Math.PI * 2);
+    context.ellipse(x - 42 * scale, y - 8 * scale, 34 * scale, 26 * scale, 0, 0, Math.PI * 2);
+    context.ellipse(x + 18 * scale, y - 14 * scale, 42 * scale, 32 * scale, 0, 0, Math.PI * 2);
+    context.ellipse(x + 58 * scale, y - 5 * scale, 28 * scale, 22 * scale, 0, 0, Math.PI * 2);
+    context.fill();
+  };
+  distantCloud(142, 170, 0.72, 0.15);
+  distantCloud(830, 226, 0.9, 0.13);
+  distantCloud(548, 102, 0.46, 0.11);
+
   const random = seededRandom(2048);
   for (let i = 0; i < 42; i++) {
     const x = random() * canvas.width;
