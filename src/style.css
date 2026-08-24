@@ -80,125 +80,7 @@ select:focus-visible,
   inset: 0;
   isolation: isolate;
   overflow: hidden;
-  background:
-    linear-gradient(180deg, #1b376b 0%, #3e7094 49%, #c98273 100%),
-    repeating-linear-gradient(180deg, rgb(255 255 255 / 0.035) 0 1px, transparent 1px 88px);
-}
-
-.sky-layer {
-  position: absolute;
-  z-index: 0;
-  inset: 0;
-  overflow: hidden;
-  pointer-events: none;
-  background:
-    linear-gradient(180deg, rgb(19 40 83 / 0.34), transparent 43%, rgb(255 197 150 / 0.12)),
-    repeating-linear-gradient(180deg, transparent 0 86px, rgb(255 235 203 / 0.045) 87px, transparent 88px);
-}
-
-.sky-cloud {
-  position: absolute;
-  width: 168px;
-  height: 42px;
-  border: 1px solid rgb(255 255 255 / 0.22);
-  border-radius: 42px;
-  background: rgb(255 240 221 / 0.66);
-  box-shadow:
-    0 14px 24px rgb(19 38 78 / 0.18),
-    inset 0 4px 0 rgb(255 255 255 / 0.2);
-  opacity: 0.76;
-  animation-play-state: paused;
-}
-
-.sky-cloud::before,
-.sky-cloud::after {
-  position: absolute;
-  bottom: 9px;
-  content: "";
-  border: inherit;
-  border-bottom: 0;
-  border-radius: 50%;
-  background: inherit;
-}
-
-.sky-cloud::before {
-  left: 24px;
-  width: 66px;
-  height: 56px;
-}
-
-.sky-cloud::after {
-  right: 28px;
-  width: 52px;
-  height: 45px;
-}
-
-.sky-cloud-a {
-  top: 10%;
-  left: 66%;
-  transform: scale(0.88);
-  animation: sky-cloud-drift-a 30s ease-in-out infinite;
-}
-
-.sky-cloud-b {
-  top: 24%;
-  left: 5%;
-  width: 126px;
-  height: 32px;
-  opacity: 0.48;
-  transform: scale(0.78);
-  animation: sky-cloud-drift-b 36s ease-in-out infinite;
-}
-
-.sky-cloud-c {
-  top: 7%;
-  left: 39%;
-  width: 106px;
-  height: 28px;
-  opacity: 0.4;
-  transform: scale(0.64);
-  animation: sky-cloud-drift-c 42s ease-in-out infinite;
-}
-
-.sky-sparkle {
-  position: absolute;
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: #ffe2a5;
-  box-shadow: 0 0 0 3px rgb(255 226 165 / 0.09), 0 0 14px rgb(255 206 132 / 0.62);
-  opacity: 0.7;
-  animation-play-state: paused;
-}
-
-.sky-sparkle-a { top: 16%; left: 28%; animation: sky-sparkle-twinkle 3.4s ease-in-out infinite; }
-.sky-sparkle-b { top: 29%; left: 78%; width: 3px; height: 3px; animation: sky-sparkle-twinkle 4.8s 0.8s ease-in-out infinite; }
-.sky-sparkle-c { top: 11%; left: 53%; width: 3px; height: 3px; animation: sky-sparkle-twinkle 5.2s 1.4s ease-in-out infinite; }
-.sky-sparkle-d { top: 36%; left: 91%; width: 5px; height: 5px; animation: sky-sparkle-twinkle 4.2s 0.2s ease-in-out infinite; }
-
-#app.idle-scene .sky-cloud,
-#app.idle-scene .sky-sparkle {
-  animation-play-state: running;
-}
-
-@keyframes sky-cloud-drift-a {
-  0%, 100% { margin-left: -10px; transform: translateY(0) scale(0.88); }
-  50% { margin-left: 34px; transform: translateY(9px) scale(0.91); }
-}
-
-@keyframes sky-cloud-drift-b {
-  0%, 100% { margin-left: 0; transform: translateY(0) scale(0.78); }
-  50% { margin-left: 38px; transform: translateY(-7px) scale(0.81); }
-}
-
-@keyframes sky-cloud-drift-c {
-  0%, 100% { margin-left: 0; transform: translateY(0) scale(0.64); }
-  50% { margin-left: -34px; transform: translateY(6px) scale(0.67); }
-}
-
-@keyframes sky-sparkle-twinkle {
-  0%, 100% { opacity: 0.32; transform: scale(0.72); }
-  50% { opacity: 1; transform: scale(1.25); }
+  background: linear-gradient(180deg, #75abe6 0%, #b5d2f3 58%, #e8c4a1 100%);
 }
 
 #app::after {
@@ -208,8 +90,8 @@ select:focus-visible,
   content: "";
   pointer-events: none;
   background:
-    linear-gradient(180deg, rgb(8 18 41 / 0.22), transparent 28%, transparent 72%, rgb(18 24 52 / 0.28)),
-    radial-gradient(ellipse at center, transparent 48%, rgb(5 11 28 / 0.28) 100%);
+    linear-gradient(180deg, rgb(18 38 74 / 0.08), transparent 28%, transparent 72%, rgb(18 30 58 / 0.12)),
+    radial-gradient(ellipse at center, transparent 52%, rgb(16 31 63 / 0.14) 100%);
 }
 
 #app canvas {

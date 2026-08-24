@@ -15,6 +15,7 @@ const PET_HEIGHT = 0.72;
 const ACCENT = 0xff9b5f;
 
 const ASSET_ROOT = `${import.meta.env.BASE_URL || '/'}assets/kenney`;
+const SKYBOX_ASSET = `${ASSET_ROOT}/skyboxes/skybox-day-2k.png`;
 const PET_ASSETS = {
   [BLACK]: `${ASSET_ROOT}/cube-pets/Models/GLB%20format/animal-cat.glb`,
   [WHITE]: `${ASSET_ROOT}/cube-pets/Models/GLB%20format/animal-panda.glb`,
@@ -133,127 +134,24 @@ function makeBoardShadowTexture() {
   return texture;
 }
 
-// A warm twilight canvas keeps the arena readable while giving the empty space
-// around the board a little more personality than a flat color can provide.
-function makeSkyTexture(renderer) {
+// Lightweight fallback used until the licensed skybox finishes decoding.
+function makeFallbackSkyTexture(renderer) {
   const canvas = document.createElement('canvas');
-  canvas.width = 1024;
-  canvas.height = 768;
+  canvas.width = 512;
+  canvas.height = 256;
   const context = canvas.getContext('2d');
   const gradient = context.createLinearGradient(0, 0, 0, canvas.height);
-  gradient.addColorStop(0, '#162851');
-  gradient.addColorStop(0.42, '#2d5680');
-  gradient.addColorStop(0.74, '#557f94');
-  gradient.addColorStop(1, '#e29c72');
+  gradient.addColorStop(0, '#72a9e6');
+  gradient.addColorStop(0.54, '#a9c9f0');
+  gradient.addColorStop(1, '#e5c6a6');
   context.fillStyle = gradient;
   context.fillRect(0, 0, canvas.width, canvas.height);
-
-  const haze = context.createLinearGradient(0, 410, 0, 768);
-  haze.addColorStop(0, 'rgba(255, 214, 169, 0)');
-  haze.addColorStop(1, 'rgba(255, 191, 142, .24)');
-  context.fillStyle = haze;
-  context.fillRect(0, 360, canvas.width, 408);
-
-  const distantCloud = (x, y, scale, opacity) => {
-    context.fillStyle = `rgba(255, 231, 208, ${opacity})`;
-    context.beginPath();
-    context.ellipse(x, y, 82 * scale, 20 * scale, 0, 0, Math.PI * 2);
-    context.ellipse(x - 42 * scale, y - 8 * scale, 34 * scale, 26 * scale, 0, 0, Math.PI * 2);
-    context.ellipse(x + 18 * scale, y - 14 * scale, 42 * scale, 32 * scale, 0, 0, Math.PI * 2);
-    context.ellipse(x + 58 * scale, y - 5 * scale, 28 * scale, 22 * scale, 0, 0, Math.PI * 2);
-    context.fill();
-  };
-  distantCloud(142, 170, 0.72, 0.15);
-  distantCloud(830, 226, 0.9, 0.13);
-  distantCloud(548, 102, 0.46, 0.11);
-
-  const random = seededRandom(2048);
-  for (let i = 0; i < 42; i++) {
-    const x = random() * canvas.width;
-    const y = 24 + random() * 390;
-    const radius = 0.7 + random() * 1.8;
-    context.fillStyle = `rgba(255, 239, 205, ${0.18 + random() * 0.42})`;
-    context.beginPath();
-    context.arc(x, y, radius, 0, Math.PI * 2);
-    context.fill();
-  }
-
-  // A few fine horizontal strokes imply a distant atmosphere without adding
-  // another mesh or texture lookup to the render path.
-  context.globalCompositeOperation = 'screen';
-  for (let i = 0; i < 7; i++) {
-    const y = 470 + i * 28;
-    context.fillStyle = `rgba(255, 225, 191, ${0.035 - i * 0.003})`;
-    context.fillRect(0, y, canvas.width, 2);
-  }
-  context.globalCompositeOperation = 'source-over';
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.minFilter = THREE.LinearFilter;
   texture.magFilter = THREE.LinearFilter;
   texture.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
-  return texture;
-}
-
-function makeCloudTexture() {
-  const canvas = document.createElement('canvas');
-  canvas.width = 256;
-  canvas.height = 112;
-  const context = canvas.getContext('2d');
-  context.clearRect(0, 0, canvas.width, canvas.height);
-  context.shadowColor = 'rgba(27, 47, 82, .24)';
-  context.shadowBlur = 12;
-  context.shadowOffsetY = 8;
-  context.fillStyle = 'rgba(255, 242, 220, 1)';
-  context.beginPath();
-  context.moveTo(28, 80);
-  context.bezierCurveTo(18, 80, 14, 70, 20, 62);
-  context.bezierCurveTo(25, 55, 34, 54, 43, 56);
-  context.bezierCurveTo(45, 38, 58, 25, 75, 26);
-  context.bezierCurveTo(89, 26, 99, 34, 103, 47);
-  context.bezierCurveTo(111, 35, 124, 29, 138, 32);
-  context.bezierCurveTo(154, 35, 163, 47, 163, 60);
-  context.bezierCurveTo(180, 52, 201, 57, 206, 72);
-  context.bezierCurveTo(210, 84, 199, 90, 184, 90);
-  context.lineTo(29, 90);
-  context.closePath();
-  context.fill();
-  context.shadowColor = 'transparent';
-  context.fillStyle = 'rgba(255, 255, 255, .42)';
-  context.beginPath();
-  context.ellipse(74, 42, 22, 10, -0.1, 0, Math.PI * 2);
-  context.ellipse(133, 49, 24, 9, 0.08, 0, Math.PI * 2);
-  context.fill();
-  context.fillStyle = 'rgba(255, 177, 139, .48)';
-  context.beginPath();
-  context.arc(61, 78, 4, 0, Math.PI * 2);
-  context.arc(174, 78, 4, 0, Math.PI * 2);
-  context.fill();
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.minFilter = THREE.LinearFilter;
-  texture.magFilter = THREE.LinearFilter;
-  texture.generateMipmaps = false;
-  return texture;
-}
-
-function makeMoteTexture() {
-  const canvas = document.createElement('canvas');
-  canvas.width = 64;
-  canvas.height = 64;
-  const context = canvas.getContext('2d');
-  const glow = context.createRadialGradient(32, 32, 1, 32, 32, 31);
-  glow.addColorStop(0, 'rgba(255, 255, 255, 1)');
-  glow.addColorStop(0.26, 'rgba(255, 236, 177, .9)');
-  glow.addColorStop(1, 'rgba(255, 210, 130, 0)');
-  context.fillStyle = glow;
-  context.fillRect(0, 0, 64, 64);
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.minFilter = THREE.LinearFilter;
-  texture.magFilter = THREE.LinearFilter;
-  texture.generateMipmaps = false;
   return texture;
 }
 
@@ -281,7 +179,7 @@ export function buildScene(container) {
   container.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
-  const skyTexture = makeSkyTexture(renderer);
+  const fallbackSkyTexture = makeFallbackSkyTexture(renderer);
   scene.background = null;
   scene.fog = new THREE.Fog(0x35546d, 24, 96);
 
@@ -304,22 +202,62 @@ export function buildScene(container) {
   controls.minPolarAngle = 0.3;
   controls.maxPolarAngle = 1.22;
 
-  // Keep the sky outside the tone-mapped arena lighting so its pastel colors
-  // stay visible on displays with a wide dynamic range.
-  const skyPlate = new THREE.Sprite(
-    new THREE.SpriteMaterial({
-      map: skyTexture,
-      transparent: false,
-      depthTest: false,
-      depthWrite: false,
-      toneMapped: false,
-      fog: false,
-    })
-  );
-  skyPlate.position.set(0, -5.8, -8.2);
-  skyPlate.scale.set(72, 72, 1);
+  // Keep the sky outside the tone-mapped arena lighting so the licensed art
+  // stays bright and readable. The sprite is resized and re-anchored to the
+  // camera, which prevents gaps when the board or viewport changes size.
+  const skyMaterial = new THREE.SpriteMaterial({
+    map: fallbackSkyTexture,
+    color: 0xb8d0ec,
+    transparent: false,
+    depthTest: false,
+    depthWrite: false,
+    toneMapped: false,
+    fog: false,
+  });
+  const skyPlate = new THREE.Sprite(skyMaterial);
+  skyPlate.name = 'asset-skybox';
   skyPlate.renderOrder = -1;
   scene.add(skyPlate);
+
+  const skyDistance = 42;
+  const skyDirection = new THREE.Vector3();
+  function fitSky() {
+    const viewHeight =
+      2 * skyDistance * Math.tan(THREE.MathUtils.degToRad(camera.fov * 0.5));
+    const viewWidth = viewHeight * camera.aspect;
+    const spriteHeight = Math.max(viewHeight, viewWidth / 2) * 1.2;
+    skyPlate.scale.set(spriteHeight * 2, spriteHeight, 1);
+  }
+  function updateSky(time, animate) {
+    camera.getWorldDirection(skyDirection);
+    skyPlate.position.copy(camera.position).addScaledVector(skyDirection, skyDistance);
+    if (animate) {
+      skyPlate.position.x += Math.sin(time * 0.07) * 0.65;
+      skyPlate.position.y += Math.sin(time * 0.11 + 1.2) * 0.2;
+    }
+  }
+  fitSky();
+
+  const skyLoader = new THREE.TextureLoader();
+  skyLoader.load(
+    SKYBOX_ASSET,
+    (texture) => {
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.minFilter = THREE.LinearFilter;
+      texture.magFilter = THREE.LinearFilter;
+      texture.generateMipmaps = false;
+      texture.anisotropy = 1;
+      skyMaterial.map = texture;
+      skyMaterial.needsUpdate = true;
+      fallbackSkyTexture.dispose();
+      skyPlate.userData.assetReady = true;
+    },
+    undefined,
+    () => {
+      // The gradient remains visible if a static host blocks the optional art.
+      skyPlate.userData.assetReady = false;
+    }
+  );
 
   // 室内环境贴图:给釉面棋子和外框提供稳定反光。
   const pmrem = new THREE.PMREMGenerator(renderer);
@@ -351,70 +289,6 @@ export function buildScene(container) {
   const fill = new THREE.DirectionalLight(0x8caeea, 0.52);
   fill.position.set(-3, 4, 7);
   scene.add(fill);
-
-  const backgroundGroup = new THREE.Group();
-  backgroundGroup.name = 'twilight-decor';
-  backgroundGroup.renderOrder = -10;
-  scene.add(backgroundGroup);
-
-  const cloudTexture = makeCloudTexture();
-  const cloudMaterial = new THREE.SpriteMaterial({
-    map: cloudTexture,
-    color: 0xffffff,
-    transparent: true,
-    opacity: 0.9,
-    depthTest: false,
-    depthWrite: false,
-    fog: false,
-    toneMapped: false,
-  });
-  const cloudSpecs = [
-    { x: -5.35, y: 4.45, z: -7, sx: 3.45, sy: 1.5, drift: 0.34, speed: 0.16, phase: 0.2 },
-    { x: 5.25, y: 4.05, z: -6.2, sx: 2.7, sy: 1.18, drift: 0.26, speed: 0.13, phase: 2.1 },
-    { x: 0.2, y: 5.55, z: -8.5, sx: 2.35, sy: 1.02, drift: 0.2, speed: 0.1, phase: 4.4 },
-  ];
-  const backgroundClouds = cloudSpecs.map((spec) => {
-    const sprite = new THREE.Sprite(cloudMaterial);
-    sprite.position.set(spec.x, spec.y, spec.z);
-    sprite.scale.set(spec.sx, spec.sy, 1);
-    sprite.renderOrder = -9;
-    backgroundGroup.add(sprite);
-    return { sprite, ...spec };
-  });
-
-  const moteCount = 18;
-  const motePositions = new Float32Array(moteCount * 3);
-  const moteBase = new Float32Array(moteCount * 3);
-  const motePhase = new Float32Array(moteCount);
-  const moteRandom = seededRandom(9102);
-  for (let i = 0; i < moteCount; i++) {
-    const index = i * 3;
-    moteBase[index] = -8.8 + moteRandom() * 17.6;
-    moteBase[index + 1] = 2.2 + moteRandom() * 5.7;
-    moteBase[index + 2] = -7.5 - moteRandom() * 5.5;
-    motePositions[index] = moteBase[index];
-    motePositions[index + 1] = moteBase[index + 1];
-    motePositions[index + 2] = moteBase[index + 2];
-    motePhase[i] = moteRandom() * Math.PI * 2;
-  }
-  const moteGeometry = new THREE.BufferGeometry();
-  moteGeometry.setAttribute('position', new THREE.BufferAttribute(motePositions, 3));
-  const moteMaterial = new THREE.PointsMaterial({
-    color: 0xffd991,
-    size: 0.14,
-    map: makeMoteTexture(),
-    transparent: true,
-    opacity: 0.72,
-    alphaTest: 0.01,
-    depthTest: false,
-    depthWrite: false,
-    sizeAttenuation: true,
-    fog: false,
-  });
-  const ambientMotes = new THREE.Points(moteGeometry, moteMaterial);
-  ambientMotes.frustumCulled = false;
-  ambientMotes.renderOrder = -8;
-  backgroundGroup.add(ambientMotes);
 
   const boardGroup = new THREE.Group();
   boardGroup.renderOrder = 5;
@@ -735,6 +609,7 @@ export function buildScene(container) {
     controls.minDistance = d * 0.7;
     controls.maxDistance = d * 1.9;
     camera.updateProjectionMatrix();
+    fitSky();
   }
 
   buildBase(SIZE);
@@ -1466,46 +1341,24 @@ export function buildScene(container) {
       update: (_, k) => {
         camera.fov = 35 + amount * Math.sin(Math.PI * k);
         camera.updateProjectionMatrix();
+        fitSky();
       },
       done: () => {
         camera.fov = 35;
         camera.updateProjectionMatrix();
+        fitSky();
       },
     });
   }
 
   function updateBackdrop(dt, time) {
-    const animate = idleMode && !reduceMotion.matches;
-    for (const cloud of backgroundClouds) {
-      const drift = animate ? Math.sin(time * cloud.speed + cloud.phase) * cloud.drift : 0;
-      const bob = animate ? Math.sin(time * cloud.speed * 1.7 + cloud.phase + 1.4) * 0.07 : 0;
-      cloud.sprite.position.x = cloud.x + drift;
-      cloud.sprite.position.y = cloud.y + bob;
-      cloud.sprite.rotation.z = animate
-        ? Math.sin(time * cloud.speed * 0.8 + cloud.phase) * 0.018
-        : 0;
-    }
-    const positions = moteGeometry.attributes.position.array;
-    for (let i = 0; i < moteCount; i++) {
-      const index = i * 3;
-      positions[index] = moteBase[index] + (animate ? Math.sin(time * 0.18 + motePhase[i]) * 0.12 : 0);
-      positions[index + 1] =
-        moteBase[index + 1] + (animate ? Math.sin(time * 0.34 + motePhase[i]) * 0.16 : 0);
-      positions[index + 2] = moteBase[index + 2];
-    }
-    if (animate) {
-      moteGeometry.attributes.position.needsUpdate = true;
-      moteMaterial.opacity = 0.56 + (Math.sin(time * 1.8) + 1) * 0.1;
-    } else {
-      moteMaterial.opacity = 0.72;
-    }
+    updateSky(time, idleMode && !reduceMotion.matches);
   }
 
   function update(dt, time) {
     // 静态画面下除了补间/粒子外不做任何周期性变化,从根源上杜绝频闪。
     tweens.update(dt);
     burst.update(dt);
-    updateBackdrop(dt, time);
     if (idleMode && !reduceMotion.matches) {
       for (const mixer of homeMixers) mixer.update(dt);
     }
@@ -1539,6 +1392,7 @@ export function buildScene(container) {
     contactShadows.visible = sun.castShadow;
     if (boardShadow) boardShadow.visible = sun.castShadow;
     controls.update();
+    updateBackdrop(dt, time);
     renderer.render(scene, camera);
   }
 
@@ -1547,6 +1401,7 @@ export function buildScene(container) {
     camera.updateProjectionMatrix();
     applyRenderQuality(curSize);
     renderer.setSize(window.innerWidth, window.innerHeight);
+    fitSky();
     fitCamera(curSize); // 旋转屏幕/改变窗口后重新构图
     if (idleMode) {
       camera.position.multiplyScalar(1.12);
@@ -1568,7 +1423,6 @@ export function buildScene(container) {
     idleMode = on;
     homePetsGroup.visible = on;
     skyPlate.visible = true;
-    backgroundGroup.visible = on;
     container.classList.toggle('idle-scene', on);
     decorGroup.visible = true;
     boardGroup.scale.setScalar(on ? 0.84 : 1);
@@ -1579,6 +1433,7 @@ export function buildScene(container) {
     } else {
       fitCamera(curSize);
     }
+    fitSky();
     if (reduceMotion.matches) boardGroup.rotation.y = 0;
   }
 
@@ -1587,7 +1442,6 @@ export function buildScene(container) {
     scene,
     camera,
     controls,
-    backgroundGroup,
     boardGroup,
     tweens,
     burst,
