@@ -10,45 +10,44 @@
     <meta name="description" content="可用鼠标、触屏或键盘游玩的 3D 黑白棋与无尽卡牌模式。" />
     <title>黑白棋 · 3D 解压版</title>
     <link rel="icon" href="data:," />
-    <script type="module" crossorigin src="/dsh_go/assets/index-BKA5xeD6.js"></script>
+    <script type="module" crossorigin src="/dsh_go/assets/index-_AAwf-1V.js"></script>
     <link rel="modulepreload" crossorigin href="/dsh_go/assets/three-DJy45rfs.js">
-    <link rel="stylesheet" crossorigin href="/dsh_go/assets/index-CNf2GJuo.css">
+    <link rel="stylesheet" crossorigin href="/dsh_go/assets/index-BokzU-1-.css">
   </head>
   <body>
     <div id="app"></div>
     <div id="hud" class="inactive" aria-hidden="true"></div>
     <main id="home" class="home" aria-labelledby="home-title">
       <div class="home-inner">
-        <div class="home-brand" aria-hidden="true">
-          <span class="brand-disc brand-disc-black"></span>
-          <span class="brand-disc brand-disc-white"></span>
-        </div>
-        <h1 class="home-title" id="home-title">黑白棋 <span class="home-sub">3D 解压版</span></h1>
-        <p class="home-tagline">策略对抗 · 手感解压 · 每一步都有音画反馈</p>
-        <div class="mode-cards">
+        <header class="home-header">
+          <div class="home-brand" aria-hidden="true">
+            <span class="brand-disc brand-disc-black"></span>
+            <span class="brand-disc brand-disc-white"></span>
+          </div>
+          <div>
+            <p class="home-sub">3D Reversi</p>
+            <h1 class="home-title" id="home-title">黑白棋</h1>
+          </div>
+        </header>
+        <nav class="mode-cards" aria-label="选择游戏模式">
           <button class="mode-card" id="mode-classic" type="button" aria-describedby="classic-desc">
-            <span class="mode-visual mode-visual-classic" aria-hidden="true">
-              <span class="mode-disc mode-disc-black"></span>
-              <span class="mode-disc mode-disc-white"></span>
-            </span>
+            <span class="mode-index" aria-hidden="true">01</span>
             <span class="mode-copy">
-              <span class="mode-name">经典模式</span>
-              <span class="mode-desc" id="classic-desc">纯粹翻转对弈,角位争夺决定胜负</span>
+              <span class="mode-name">经典对局</span>
+              <span class="mode-desc" id="classic-desc">标准规则 · 三档电脑难度</span>
             </span>
             <i class="mode-arrow" data-lucide="arrow-right" aria-hidden="true"></i>
           </button>
           <button class="mode-card" id="mode-cards" type="button" aria-describedby="cards-desc">
-            <span class="mode-visual mode-visual-cards" aria-hidden="true">
-              <i data-lucide="layers-3"></i>
-            </span>
+            <span class="mode-index" aria-hidden="true">02</span>
             <span class="mode-copy">
-              <span class="mode-name">无尽卡牌 <span class="badge">策略</span></span>
-              <span class="mode-desc" id="cards-desc">行动力组牌,留牌反制,逆风追赶</span>
+              <span class="mode-name">无尽卡牌</span>
+              <span class="mode-desc" id="cards-desc">三分钟快局 · 行动力组牌</span>
             </span>
             <i class="mode-arrow" data-lucide="arrow-right" aria-hidden="true"></i>
           </button>
-        </div>
-        <p class="home-tip">黑棋先行 · 点击发光格子落子 · 拖拽旋转视角 · R 重开 / U 悔棋 / M 静音</p>
+        </nav>
+        <p class="home-status"><span aria-hidden="true"></span>黑棋先行</p>
       </div>
     </main>
   </body>
