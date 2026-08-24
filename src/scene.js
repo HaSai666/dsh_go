@@ -250,11 +250,13 @@ export function buildScene(container) {
       skyMaterial.map = texture;
       skyMaterial.needsUpdate = true;
       fallbackSkyTexture.dispose();
+      document.querySelector('.sky-preload')?.remove();
       skyPlate.userData.assetReady = true;
     },
     undefined,
     () => {
       // The gradient remains visible if a static host blocks the optional art.
+      document.querySelector('.sky-preload')?.remove();
       skyPlate.userData.assetReady = false;
     }
   );
