@@ -6,14 +6,24 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
-    <meta name="theme-color" content="#081321" />
+    <meta name="theme-color" content="#172851" />
     <meta name="description" content="可用鼠标、触屏或键盘游玩的 3D 黑白棋与无尽卡牌模式。" />
     <title>黑白棋 · 3D 解压版</title>
     <link rel="icon" href="data:," />
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
-    <div id="app"></div>
+    <div id="app">
+      <div class="sky-layer" aria-hidden="true">
+        <span class="sky-cloud sky-cloud-a"></span>
+        <span class="sky-cloud sky-cloud-b"></span>
+        <span class="sky-cloud sky-cloud-c"></span>
+        <span class="sky-sparkle sky-sparkle-a"></span>
+        <span class="sky-sparkle sky-sparkle-b"></span>
+        <span class="sky-sparkle sky-sparkle-c"></span>
+        <span class="sky-sparkle sky-sparkle-d"></span>
+      </div>
+    </div>
     <div id="hud" class="inactive" aria-hidden="true"></div>
     <main id="home" class="home" aria-labelledby="home-title">
       <div class="home-inner">

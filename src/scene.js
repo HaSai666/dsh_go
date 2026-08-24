@@ -133,6 +133,117 @@ function makeBoardShadowTexture() {
   return texture;
 }
 
+// A warm twilight canvas keeps the arena readable while giving the empty space
+// around the board a little more personality than a flat color can provide.
+function makeSkyTexture(renderer) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1024;
+  canvas.height = 768;
+  const context = canvas.getContext('2d');
+  const gradient = context.createLinearGradient(0, 0, 0, canvas.height);
+  gradient.addColorStop(0, '#162851');
+  gradient.addColorStop(0.42, '#2d5680');
+  gradient.addColorStop(0.74, '#557f94');
+  gradient.addColorStop(1, '#e29c72');
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, canvas.width, canvas.height);
+
+  const haze = context.createLinearGradient(0, 410, 0, 768);
+  haze.addColorStop(0, 'rgba(255, 214, 169, 0)');
+  haze.addColorStop(1, 'rgba(255, 191, 142, .24)');
+  context.fillStyle = haze;
+  context.fillRect(0, 360, canvas.width, 408);
+
+  const random = seededRandom(2048);
+  for (let i = 0; i < 42; i++) {
+    const x = random() * canvas.width;
+    const y = 24 + random() * 390;
+    const radius = 0.7 + random() * 1.8;
+    context.fillStyle = `rgba(255, 239, 205, ${0.18 + random() * 0.42})`;
+    context.beginPath();
+    context.arc(x, y, radius, 0, Math.PI * 2);
+    context.fill();
+  }
+
+  // A few fine horizontal strokes imply a distant atmosphere without adding
+  // another mesh or texture lookup to the render path.
+  context.globalCompositeOperation = 'screen';
+  for (let i = 0; i < 7; i++) {
+    const y = 470 + i * 28;
+    context.fillStyle = `rgba(255, 225, 191, ${0.035 - i * 0.003})`;
+    context.fillRect(0, y, canvas.width, 2);
+  }
+  context.globalCompositeOperation = 'source-over';
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
+  return texture;
+}
+
+function makeCloudTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 112;
+  const context = canvas.getContext('2d');
+  context.clearRect(0, 0, canvas.width, canvas.height);
+  context.shadowColor = 'rgba(27, 47, 82, .24)';
+  context.shadowBlur = 12;
+  context.shadowOffsetY = 8;
+  context.fillStyle = 'rgba(255, 242, 220, 1)';
+  context.beginPath();
+  context.moveTo(28, 80);
+  context.bezierCurveTo(18, 80, 14, 70, 20, 62);
+  context.bezierCurveTo(25, 55, 34, 54, 43, 56);
+  context.bezierCurveTo(45, 38, 58, 25, 75, 26);
+  context.bezierCurveTo(89, 26, 99, 34, 103, 47);
+  context.bezierCurveTo(111, 35, 124, 29, 138, 32);
+  context.bezierCurveTo(154, 35, 163, 47, 163, 60);
+  context.bezierCurveTo(180, 52, 201, 57, 206, 72);
+  context.bezierCurveTo(210, 84, 199, 90, 184, 90);
+  context.lineTo(29, 90);
+  context.closePath();
+  context.fill();
+  context.shadowColor = 'transparent';
+  context.fillStyle = 'rgba(255, 255, 255, .42)';
+  context.beginPath();
+  context.ellipse(74, 42, 22, 10, -0.1, 0, Math.PI * 2);
+  context.ellipse(133, 49, 24, 9, 0.08, 0, Math.PI * 2);
+  context.fill();
+  context.fillStyle = 'rgba(255, 177, 139, .48)';
+  context.beginPath();
+  context.arc(61, 78, 4, 0, Math.PI * 2);
+  context.arc(174, 78, 4, 0, Math.PI * 2);
+  context.fill();
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.generateMipmaps = false;
+  return texture;
+}
+
+function makeMoteTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 64;
+  canvas.height = 64;
+  const context = canvas.getContext('2d');
+  const glow = context.createRadialGradient(32, 32, 1, 32, 32, 31);
+  glow.addColorStop(0, 'rgba(255, 255, 255, 1)');
+  glow.addColorStop(0.26, 'rgba(255, 236, 177, .9)');
+  glow.addColorStop(1, 'rgba(255, 210, 130, 0)');
+  context.fillStyle = glow;
+  context.fillRect(0, 0, 64, 64);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.generateMipmaps = false;
+  return texture;
+}
+
 export function buildScene(container) {
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   const memoryConstrained = (navigator.deviceMemory || 8) <= 4;
@@ -141,9 +252,14 @@ export function buildScene(container) {
     if (size >= 16) return 1;
     return isCompactViewport() && !memoryConstrained ? 1.2 : 1;
   };
-  const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+  const renderer = new THREE.WebGLRenderer({
+    antialias: true,
+    alpha: true,
+    powerPreference: 'high-performance',
+  });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, pixelRatioCap(SIZE)));
   renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setClearColor(0x000000, 0);
   renderer.shadowMap.enabled = false;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -152,8 +268,9 @@ export function buildScene(container) {
   container.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x081321);
-  scene.fog = new THREE.Fog(0x081321, 24, 96);
+  const skyTexture = makeSkyTexture(renderer);
+  scene.background = null;
+  scene.fog = new THREE.Fog(0x35546d, 24, 96);
 
   const camera = new THREE.PerspectiveCamera(
     35, // 12×12 大棋盘:视角收窄 + 相机距离拉远,整盘尽收眼底
@@ -174,12 +291,29 @@ export function buildScene(container) {
   controls.minPolarAngle = 0.3;
   controls.maxPolarAngle = 1.22;
 
+  // Keep the sky outside the tone-mapped arena lighting so its pastel colors
+  // stay visible on displays with a wide dynamic range.
+  const skyPlate = new THREE.Sprite(
+    new THREE.SpriteMaterial({
+      map: skyTexture,
+      transparent: false,
+      depthTest: false,
+      depthWrite: false,
+      toneMapped: false,
+      fog: false,
+    })
+  );
+  skyPlate.position.set(0, -5.8, -8.2);
+  skyPlate.scale.set(72, 72, 1);
+  skyPlate.renderOrder = -1;
+  scene.add(skyPlate);
+
   // 室内环境贴图:给釉面棋子和外框提供稳定反光。
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 
   // 暖色主光塑造棋子体积,冷色轮廓光把黑棋从暗场中分离出来。
-  scene.add(new THREE.HemisphereLight(0xeaf5ff, 0x081321, 0.82));
+  scene.add(new THREE.HemisphereLight(0xeaf5ff, 0x29445b, 0.82));
   const sun = new THREE.DirectionalLight(0xffdfb2, 3.1);
   sun.position.set(5.5, 7.5, 6.5);
   sun.castShadow = true;
@@ -205,12 +339,81 @@ export function buildScene(container) {
   fill.position.set(-3, 4, 7);
   scene.add(fill);
 
+  const backgroundGroup = new THREE.Group();
+  backgroundGroup.name = 'twilight-decor';
+  backgroundGroup.renderOrder = -10;
+  scene.add(backgroundGroup);
+
+  const cloudTexture = makeCloudTexture();
+  const cloudMaterial = new THREE.SpriteMaterial({
+    map: cloudTexture,
+    color: 0xffffff,
+    transparent: true,
+    opacity: 0.9,
+    depthTest: false,
+    depthWrite: false,
+    fog: false,
+    toneMapped: false,
+  });
+  const cloudSpecs = [
+    { x: -5.35, y: 4.45, z: -7, sx: 3.45, sy: 1.5, drift: 0.34, speed: 0.16, phase: 0.2 },
+    { x: 5.25, y: 4.05, z: -6.2, sx: 2.7, sy: 1.18, drift: 0.26, speed: 0.13, phase: 2.1 },
+    { x: 0.2, y: 5.55, z: -8.5, sx: 2.35, sy: 1.02, drift: 0.2, speed: 0.1, phase: 4.4 },
+  ];
+  const backgroundClouds = cloudSpecs.map((spec) => {
+    const sprite = new THREE.Sprite(cloudMaterial);
+    sprite.position.set(spec.x, spec.y, spec.z);
+    sprite.scale.set(spec.sx, spec.sy, 1);
+    sprite.renderOrder = -9;
+    backgroundGroup.add(sprite);
+    return { sprite, ...spec };
+  });
+
+  const moteCount = 18;
+  const motePositions = new Float32Array(moteCount * 3);
+  const moteBase = new Float32Array(moteCount * 3);
+  const motePhase = new Float32Array(moteCount);
+  const moteRandom = seededRandom(9102);
+  for (let i = 0; i < moteCount; i++) {
+    const index = i * 3;
+    moteBase[index] = -8.8 + moteRandom() * 17.6;
+    moteBase[index + 1] = 2.2 + moteRandom() * 5.7;
+    moteBase[index + 2] = -7.5 - moteRandom() * 5.5;
+    motePositions[index] = moteBase[index];
+    motePositions[index + 1] = moteBase[index + 1];
+    motePositions[index + 2] = moteBase[index + 2];
+    motePhase[i] = moteRandom() * Math.PI * 2;
+  }
+  const moteGeometry = new THREE.BufferGeometry();
+  moteGeometry.setAttribute('position', new THREE.BufferAttribute(motePositions, 3));
+  const moteMaterial = new THREE.PointsMaterial({
+    color: 0xffd991,
+    size: 0.14,
+    map: makeMoteTexture(),
+    transparent: true,
+    opacity: 0.72,
+    alphaTest: 0.01,
+    depthTest: false,
+    depthWrite: false,
+    sizeAttenuation: true,
+    fog: false,
+  });
+  const ambientMotes = new THREE.Points(moteGeometry, moteMaterial);
+  ambientMotes.frustumCulled = false;
+  ambientMotes.renderOrder = -8;
+  backgroundGroup.add(ambientMotes);
+
   const boardGroup = new THREE.Group();
+  boardGroup.renderOrder = 5;
   scene.add(boardGroup);
   const baseGroup = new THREE.Group(); // 外框/底板/格子:换尺寸时整体重建
   const pieceGroup = new THREE.Group(); // 棋子/幽灵/标记:跨尺寸保留
   const decorGroup = new THREE.Group(); // 竞技场角柱与徽记,不参与棋盘拾取
   const homePetsGroup = new THREE.Group(); // 主页展示用的两只观众动物
+  baseGroup.renderOrder = 5;
+  pieceGroup.renderOrder = 6;
+  decorGroup.renderOrder = 6;
+  homePetsGroup.renderOrder = 7;
   boardGroup.add(baseGroup);
   boardGroup.add(pieceGroup);
   boardGroup.add(decorGroup);
@@ -311,7 +514,7 @@ export function buildScene(container) {
   }
 
   const tableTexture = makeSurfaceTexture(renderer, {
-    base: [25, 39, 55],
+    base: [31, 53, 73],
     noise: 12,
     weave: true,
     seed: 31,
@@ -338,12 +541,13 @@ export function buildScene(container) {
   const table = new THREE.Mesh(
     new THREE.PlaneGeometry(80, 80),
     new THREE.MeshLambertMaterial({
-      color: 0x253b52,
+      color: 0x2b4b66,
       map: tableTexture,
     })
   );
   table.rotation.x = -Math.PI / 2;
   table.position.y = -0.22;
+  table.renderOrder = -2;
   table.receiveShadow = true;
   scene.add(table);
 
@@ -677,6 +881,8 @@ export function buildScene(container) {
   const loader = new GLTFLoader();
   const ghostPetMats = { [BLACK]: ghostMats[BLACK], [WHITE]: ghostMats[WHITE] };
   const petRoots = new Map();
+  const petAnimations = new Map();
+  let homeMixers = [];
 
   function normalizePetGeometry(geometry) {
     geometry.computeBoundingBox();
@@ -719,6 +925,7 @@ export function buildScene(container) {
   function usePetAsset(color, gltf) {
     const root = gltf.scene;
     petRoots.set(color, root);
+    petAnimations.set(color, gltf.animations || []);
     const geometry = mergedPetGeometry(root);
     if (!geometry) return;
     const source = root.getObjectByProperty('isMesh', true);
@@ -770,7 +977,9 @@ export function buildScene(container) {
 
   function renderHomePets() {
     clearGroup(homePetsGroup);
+    homeMixers = [];
     const roots = [petRoots.get(BLACK), petRoots.get('fox') || petRoots.get(WHITE)];
+    const animationKeys = [BLACK, 'fox'];
     homePetSlots.forEach((slot, index) => {
       const source = roots[index];
       if (!source) return;
@@ -785,6 +994,18 @@ export function buildScene(container) {
         }
       });
       homePetsGroup.add(pet);
+      if (!reduceMotion.matches) {
+        const clips = petAnimations.get(animationKeys[index]) || [];
+        const idle = clips.find((clip) => clip.name.toLowerCase() === 'idle');
+        if (idle) {
+          const mixer = new THREE.AnimationMixer(pet);
+          const action = mixer.clipAction(idle);
+          action.setLoop(THREE.LoopRepeat, Infinity);
+          action.play();
+          mixer.setTime(index * 0.72);
+          homeMixers.push(mixer);
+        }
+      }
     });
   }
 
@@ -797,6 +1018,7 @@ export function buildScene(container) {
   loadAsset(PET_ASSETS[WHITE], (gltf) => usePetAsset(WHITE, gltf));
   loadAsset(HOME_FOX_ASSET, (gltf) => {
     petRoots.set('fox', gltf.scene);
+    petAnimations.set('fox', gltf.animations || []);
     renderHomePets();
   });
   Object.entries(ARENA_ASSETS).forEach(([name, url]) => {
@@ -958,6 +1180,7 @@ export function buildScene(container) {
     beginPieceAnimation(piece);
     piece.mesh.position.y = PIECE_Y + 2.8;
     piece.mesh.scale.set(1, 1, 1);
+    piece.mesh.rotation.set(0, 0, 0);
     return piece;
   }
 
@@ -976,9 +1199,15 @@ export function buildScene(container) {
         ease: easings.easeInQuad,
         update: (e) => {
           piece.mesh.position.y = PIECE_Y + 2.8 * (1 - e);
+          const landing = Math.max(0, (e - 0.82) / 0.18);
+          const squash = Math.sin(landing * Math.PI);
+          piece.mesh.scale.set(1 + squash * 0.08, 1 - squash * 0.12, 1 + squash * 0.08);
+          piece.mesh.rotation.z = Math.sin(e * Math.PI * 2.4) * 0.035 * (1 - e);
         },
         done: () => {
           piece.mesh.position.y = PIECE_Y;
+          piece.mesh.scale.set(1, 1, 1);
+          piece.mesh.rotation.z = 0;
           endPieceAnimation(piece);
           resolve();
         },
@@ -1004,12 +1233,17 @@ export function buildScene(container) {
         tweens.add({
           dur: 0.26,
           update: (e) => {
-            piece.mesh.scale.y = 1 - 0.13 * Math.sin(Math.PI * e);
-            piece.mesh.position.y = base + 0.05 * Math.sin(Math.PI * e);
+            const wave = Math.sin(Math.PI * e);
+            piece.mesh.scale.set(1 + 0.035 * wave, 1 - 0.13 * wave, 1 + 0.035 * wave);
+            piece.mesh.position.y = base + 0.05 * wave;
+            piece.mesh.rotation.x = Math.sin(Math.PI * e) * (dr * 0.018);
+            piece.mesh.rotation.z = Math.sin(Math.PI * e) * (dc * 0.018);
           },
           done: () => {
-            piece.mesh.scale.y = 1;
+            piece.mesh.scale.set(1, 1, 1);
             piece.mesh.position.y = base;
+            piece.mesh.rotation.x = 0;
+            piece.mesh.rotation.z = 0;
             piece.bouncing = false;
             endPieceAnimation(piece);
           },
@@ -1025,6 +1259,7 @@ export function buildScene(container) {
       piece.mesh.quaternion.identity();
       piece.mesh.position.y = PIECE_Y;
       piece.mesh.scale.set(1, 1, 1);
+      piece.mesh.rotation.set(0, 0, 0);
       setPieceColor(piece, color);
       rebuildPieceInstances();
       return Promise.resolve();
@@ -1042,7 +1277,8 @@ export function buildScene(container) {
             piece.mesh.position.y = PIECE_Y + 0.32 * s;
           }
           const sh = 1 - 0.5 * s;
-          piece.mesh.scale.set(sh, 1, sh);
+          piece.mesh.scale.set(sh, 1 + 0.1 * s, sh);
+          piece.mesh.rotation.z = Math.sin(Math.PI * e) * 0.025;
           if (!swapped && e >= 0.5) {
             swapped = true;
             setPieceColor(piece, color);
@@ -1052,6 +1288,7 @@ export function buildScene(container) {
           piece.mesh.quaternion.identity();
           piece.mesh.position.y = PIECE_Y;
           piece.mesh.scale.set(1, 1, 1);
+          piece.mesh.rotation.z = 0;
           setPieceColor(piece, color);
           endPieceAnimation(piece);
           resolve();
@@ -1117,15 +1354,19 @@ export function buildScene(container) {
     return new Promise((resolve) => {
       tweens.add({
         dur: 0.28 * pace,
+        ease: easings.easeOutBack,
         update: (e) => {
-          piece.mesh.scale.setScalar(1 + 0.4 * e);
-          piece.mesh.position.y = PIECE_Y + 0.6 * e;
+          const lift = Math.sin((Math.min(e, 1) * Math.PI) / 2);
+          piece.mesh.scale.set(1 + 0.4 * e, 1 + 0.52 * e, 1 + 0.4 * e);
+          piece.mesh.position.y = PIECE_Y + 0.6 * lift;
+          piece.mesh.rotation.z = Math.sin(e * Math.PI * 2.2) * 0.12;
         },
         done: () => {
           piece.active = false;
           piece.mesh.visible = false;
           piece.mesh.scale.set(1, 1, 1);
           piece.mesh.position.y = PIECE_Y;
+          piece.mesh.rotation.z = 0;
           endPieceAnimation(piece);
           resolve();
         },
@@ -1220,10 +1461,41 @@ export function buildScene(container) {
     });
   }
 
+  function updateBackdrop(dt, time) {
+    const animate = idleMode && !reduceMotion.matches;
+    for (const cloud of backgroundClouds) {
+      const drift = animate ? Math.sin(time * cloud.speed + cloud.phase) * cloud.drift : 0;
+      const bob = animate ? Math.sin(time * cloud.speed * 1.7 + cloud.phase + 1.4) * 0.07 : 0;
+      cloud.sprite.position.x = cloud.x + drift;
+      cloud.sprite.position.y = cloud.y + bob;
+      cloud.sprite.rotation.z = animate
+        ? Math.sin(time * cloud.speed * 0.8 + cloud.phase) * 0.018
+        : 0;
+    }
+    const positions = moteGeometry.attributes.position.array;
+    for (let i = 0; i < moteCount; i++) {
+      const index = i * 3;
+      positions[index] = moteBase[index] + (animate ? Math.sin(time * 0.18 + motePhase[i]) * 0.12 : 0);
+      positions[index + 1] =
+        moteBase[index + 1] + (animate ? Math.sin(time * 0.34 + motePhase[i]) * 0.16 : 0);
+      positions[index + 2] = moteBase[index + 2];
+    }
+    if (animate) {
+      moteGeometry.attributes.position.needsUpdate = true;
+      moteMaterial.opacity = 0.56 + (Math.sin(time * 1.8) + 1) * 0.1;
+    } else {
+      moteMaterial.opacity = 0.72;
+    }
+  }
+
   function update(dt, time) {
     // 静态画面下除了补间/粒子外不做任何周期性变化,从根源上杜绝频闪。
     tweens.update(dt);
     burst.update(dt);
+    updateBackdrop(dt, time);
+    if (idleMode && !reduceMotion.matches) {
+      for (const mixer of homeMixers) mixer.update(dt);
+    }
     if (directorMarker.visible && !reduceMotion.matches) {
       const pulse = 1 + Math.sin(time * 4.2) * 0.12;
       directorMarker.scale.setScalar(pulse);
@@ -1282,6 +1554,9 @@ export function buildScene(container) {
     if (idleMode === on) return;
     idleMode = on;
     homePetsGroup.visible = on;
+    skyPlate.visible = true;
+    backgroundGroup.visible = on;
+    container.classList.toggle('idle-scene', on);
     decorGroup.visible = true;
     boardGroup.scale.setScalar(on ? 0.84 : 1);
     boardGroup.position.y = 0;
@@ -1299,6 +1574,7 @@ export function buildScene(container) {
     scene,
     camera,
     controls,
+    backgroundGroup,
     boardGroup,
     tweens,
     burst,
