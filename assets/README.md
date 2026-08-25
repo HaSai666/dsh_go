@@ -9,3 +9,7 @@ The bundled models are used in the 3D arena and are kept with their original lic
 The runtime uses the included 2K resize of `skybox-day.png` to keep mobile texture memory modest; the original 4K source is retained alongside it.
 
 The source packages provide GLB models and are suitable for personal and commercial projects under CC0. The local `License.txt` files are retained with the extracted assets.
+
+The audio layer also includes two small Kenney CC0 packs: `kenney/casino-audio` for
+card/chip foley and `kenney/impact-sounds` for heavier board impacts. Their original
+license files are kept beside the extracted OGG files.
