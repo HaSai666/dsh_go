@@ -85,7 +85,7 @@ npm run build  # 产物输出到 dist/
 | `src/ai.js` | 三档落子 AI + 卡牌选牌策略 |
 | `src/scene.js` | 3D 场景:模块化竞技场、Kenney GLB 动物/装饰、实例化棋子/格子、软接触阴影、高亮、视差镜头与动画接口 |
 | `src/fx.js` | 补间动画、棋盘震动、FOV 推冲、粒子爆裂 |
-| `src/audio.js` | Web Audio 实时合成音效(落子/翻面/出牌/护盾/爆破),零素材 |
+| `src/audio.js` | Web Audio 音效层：Kenney CC0 筹码/纸牌/撞击素材 + 轻量程序化弹拨、包络与随机化 |
 | `src/ui.js` | HUD、主页、卡牌手牌栏、终局弹窗 |
 | `src/controller.js` | 对局流程、卡牌结算、护盾状态、悔棋回滚 |
 | `src/main.js` | 入口与渲染循环(含 `window.__game` 等调试钩子) |
