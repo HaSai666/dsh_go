@@ -5,6 +5,7 @@ The bundled models are used in the 3D arena and are kept with their original lic
 - `kenney/cube-pets` — [Cube Pets](https://kenney.nl/assets/cube-pets), created by Kenney, CC0.
 - `kenney/mini-arena` — [Mini Arena](https://kenney.nl/assets/mini-arena), created by Kenney, CC0.
 - `kenney/skyboxes` — [Skyboxes](https://kenney.nl/assets/skyboxes), created by Kenney, CC0.
+- `kenney/board-game-icons` — [Board Game Icons](https://kenney.nl/assets/board-game-icons), created by Kenney, CC0.
 
 The runtime uses the included 2K resize of `skybox-day.png` to keep mobile texture memory modest; the original 4K source is retained alongside it.
 
