@@ -1,12 +1,21 @@
 {
   "name": "othello3d",
+  "description": "可离线游玩的 3D 动物竞技场黑白棋与无尽卡牌游戏",
+  "author": "HaSai666",
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "main": "desktop/main.cjs",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:package": "node scripts/build-package.mjs web",
     "preview": "vite preview",
+    "package:apk": "node scripts/build-package.mjs apk",
+    "package:exe": "node scripts/build-package.mjs exe",
+    "package:all": "node scripts/build-package.mjs all",
+    "assets:native": "node scripts/generate-native-assets.mjs",
+    "setup:android": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup-android-sdk.ps1",
     "test": "node test-logic.mjs",
     "test:balance": "node balance-smoke.mjs",
     "test:browser": "node interaction-smoke.mjs",
@@ -19,8 +28,41 @@
     "three": "^0.180.0"
   },
   "devDependencies": {
+    "@capacitor/android": "8.5.0",
+    "@capacitor/cli": "8.5.0",
+    "@capacitor/core": "8.5.0",
+    "electron": "44.0.0",
+    "electron-builder": "26.15.3",
     "playwright-core": "^1.62.1",
     "pngjs": "^7.0.0",
     "vite": "^7.0.0"
+  },
+  "build": {
+    "appId": "io.github.hasai666.othello3d",
+    "productName": "黑白棋 3D 解压版",
+    "electronDist": "node_modules/electron/dist",
+    "asar": true,
+    "compression": "maximum",
+    "directories": {
+      "output": "release/windows",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "desktop/**/*",
+      "!node_modules/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/app-icon.png",
+      "artifactName": "Othello3D-${version}-win-${arch}.${ext}"
+    }
   }
 }

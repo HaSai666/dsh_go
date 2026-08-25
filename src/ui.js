@@ -47,7 +47,10 @@ const UI_ICONS = {
   Zap,
 };
 
-const CARD_ART_ROOT = `${import.meta.env.BASE_URL}assets/kenney/board-game-icons/cards`;
+const CARD_ART_ROOT = new URL(
+  'assets/kenney/board-game-icons/cards/',
+  document.baseURI
+).href.replace(/\/$/, '');
 
 function renderMetaIcon(meta) {
   if (meta.art) {

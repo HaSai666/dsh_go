@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">黑白棋 3D 解压版</string>
+    <string name="title_activity_main">黑白棋 3D 解压版</string>
+    <string name="package_name">io.github.hasai666.othello3d</string>
+    <string name="custom_url_scheme">io.github.hasai666.othello3d</string>
+</resources>

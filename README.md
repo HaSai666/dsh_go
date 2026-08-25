@@ -57,6 +57,33 @@ npm run test:perf # 桌面/移动端 8×8 与 10×10 盘面帧时间预算
 npm run build  # 产物输出到 dist/
 ```
 
+## APK 与 EXE 发布
+
+原生壳都使用本地 `dist/` 资源，运行时不依赖 GitHub Pages 或其他网络服务。
+
+```bash
+# Windows x64 便携 EXE
+npm run package:exe
+
+# Android 首次构建需准备 JDK 21 与 API 36 SDK
+winget install Microsoft.OpenJDK.21
+npm run setup:android
+npm run package:apk
+
+# 一次构建两端
+npm run package:all
+```
+
+产物位置：
+
+- `release/windows/Othello3D-<version>-win-x64.exe`
+- `release/android/Othello3D-<version>-android-debug.apk`
+- `release/SHA256SUMS.txt`
+
+APK 最低支持 Android 7.0(API 24)，目标 API 36，并使用 Android debug 证书签名，可直接侧载测试。提交应用商店前需改用长期保存的正式签名密钥。Windows 便携版未配置商业代码签名证书，首次下载运行时可能出现 SmartScreen 提示。
+
+`build/app-icon.png` 是从游戏内真实 3D 场景渲染的统一应用图标；`npm run assets:native` 可重新生成 Android 各密度图标与横竖屏启动图。
+
 ## 操作
 
 - 主页选模式进入;游戏内右上角"主页"按钮返回
@@ -89,6 +116,9 @@ npm run build  # 产物输出到 dist/
 | `src/ui.js` | HUD、主页、卡牌手牌栏、终局弹窗 |
 | `src/controller.js` | 对局流程、卡牌结算、护盾状态、悔棋回滚 |
 | `src/main.js` | 入口与渲染循环(含 `window.__game` 等调试钩子) |
+| `desktop/main.cjs` | Electron 安全本地协议、窗口与生命周期 |
+| `android/` | Capacitor Android 原生工程(API 24~36) |
+| `scripts/build-package.mjs` | Web、APK、EXE 与 SHA-256 统一打包脚本 |
 
 ## 素材许可
 

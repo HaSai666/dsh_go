@@ -1,6 +1,12 @@
 node_modules/
 dist/
+release/
 debug-shots/
 .playwright-cli/
+android/.gradle/
+android/local.properties
+android/app/build/
+android/build/
+android/capacitor-cordova-android-plugins/
 .DS_Store
 *.log

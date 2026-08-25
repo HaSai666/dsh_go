@@ -1,0 +1,12 @@
+{
+  "appId": "io.github.hasai666.othello3d",
+  "appName": "黑白棋 3D 解压版",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": false,
+    "backgroundColor": "#7fa5e8"
+  }
+}
