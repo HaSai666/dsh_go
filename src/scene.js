@@ -12,6 +12,8 @@ const CELL = 1;
 const CELL_Y = 0.215; // 模块顶面高度
 const PIECE_Y = CELL_Y + 0.05; // 动物脚底略离开模块,避免深度冲突
 const PET_HEIGHT = 0.72;
+const TOKEN_BASE_Y = CELL_Y + 0.012;
+const TOKEN_RING_Y = TOKEN_BASE_Y + 0.086;
 const ACCENT = 0xff9b5f;
 
 const ASSET_ROOT = `${import.meta.env.BASE_URL || '/'}assets/kenney`;
@@ -22,8 +24,6 @@ const PET_ASSETS = {
 };
 const HOME_FOX_ASSET = `${ASSET_ROOT}/cube-pets/Models/GLB%20format/animal-fox.glb`;
 const ARENA_ASSETS = {
-  block: `${ASSET_ROOT}/mini-arena/Models/GLB%20format/block.glb`,
-  column: `${ASSET_ROOT}/mini-arena/Models/GLB%20format/column.glb`,
   trophy: `${ASSET_ROOT}/mini-arena/Models/GLB%20format/trophy.glb`,
 };
 
@@ -174,7 +174,7 @@ export function buildScene(container) {
   renderer.shadowMap.enabled = false;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.04;
+  renderer.toneMappingExposure = 0.89;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   container.appendChild(renderer.domElement);
 
@@ -364,61 +364,105 @@ export function buildScene(container) {
     decorMaterials = [];
     clearGroup(decorGroup);
     const edge = size / 2 + 0.72;
-    const cornerMat = new THREE.MeshStandardMaterial({
-      color: 0x567187,
-      roughness: 0.42,
-      metalness: 0.18,
+    // The original arena corner props are intentionally low-poly. Replace
+    // them with a small set of bevelled, instanced layers so the four anchors
+    // read as premium game hardware without adding one draw call per corner.
+    const cornerBaseMat = new THREE.MeshPhysicalMaterial({
+      color: 0x172a39,
+      roughness: 0.28,
+      metalness: 0.48,
+      clearcoat: 0.62,
+      clearcoatRoughness: 0.2,
     });
-    const capMat = new THREE.MeshStandardMaterial({
-      color: ACCENT,
+    const cornerBodyMat = new THREE.MeshPhysicalMaterial({
+      color: 0x496b7d,
       roughness: 0.34,
-      metalness: 0.4,
-      emissive: ACCENT,
-      emissiveIntensity: 0.08,
+      metalness: 0.22,
+      clearcoat: 0.5,
+      clearcoatRoughness: 0.24,
     });
-    decorMaterials.push(cornerMat, capMat);
-    const pillarGeo = new RoundedBoxGeometry(0.22, 0.74, 0.22, 3, 0.04);
-    const capGeo = new THREE.CylinderGeometry(0.18, 0.22, 0.06, 12);
-    decorGeometries.push(pillarGeo, capGeo);
-    for (const [x, z] of [[-edge, -edge], [edge, -edge], [-edge, edge], [edge, edge]]) {
-      const pillar = arenaTemplates.get('column')?.clone(true) || new THREE.Mesh(pillarGeo, cornerMat);
-      if (pillar.isObject3D && !pillar.isMesh) {
-        normalizeRoot(pillar, 0.8);
-      } else {
-        pillar.material = cornerMat;
-      }
-      pillar.position.set(x, 0.22, z);
-      pillar.traverse((node) => {
-        if (node.isMesh) {
-          if (node.material?.color) node.material.color.setHex(0x6b8295);
-          if (node.material?.roughness !== undefined) node.material.roughness = 0.62;
-          node.castShadow = true;
-          node.receiveShadow = true;
-        }
+    const capMat = new THREE.MeshPhysicalMaterial({
+      color: ACCENT,
+      roughness: 0.22,
+      metalness: 0.62,
+      clearcoat: 0.72,
+      clearcoatRoughness: 0.16,
+      emissive: ACCENT,
+      emissiveIntensity: 0.045,
+    });
+    const insetMat = new THREE.MeshPhysicalMaterial({
+      color: 0xc3d7dc,
+      roughness: 0.18,
+      metalness: 0.42,
+      clearcoat: 0.82,
+      clearcoatRoughness: 0.14,
+    });
+    const gemMat = new THREE.MeshPhysicalMaterial({
+      color: 0xb6e6e8,
+      roughness: 0.14,
+      metalness: 0.26,
+      clearcoat: 0.9,
+      clearcoatRoughness: 0.08,
+      emissive: 0x2c7274,
+      emissiveIntensity: 0.12,
+    });
+
+    const cornerLayers = [
+      {
+        geometry: new RoundedBoxGeometry(0.62, 0.14, 0.62, 4, 0.065),
+        material: cornerBaseMat,
+        y: -0.145,
+      },
+      {
+        geometry: new RoundedBoxGeometry(0.4, 0.42, 0.4, 4, 0.075),
+        material: cornerBodyMat,
+        y: 0.11,
+      },
+      {
+        geometry: new RoundedBoxGeometry(0.56, 0.12, 0.56, 4, 0.055),
+        material: capMat,
+        y: 0.38,
+      },
+      {
+        geometry: new RoundedBoxGeometry(0.31, 0.032, 0.31, 4, 0.018),
+        material: insetMat,
+        y: 0.456,
+      },
+    ];
+    const collarGeometry = new THREE.TorusGeometry(0.22, 0.018, 10, 32);
+    collarGeometry.rotateX(Math.PI / 2);
+    cornerLayers.push({ geometry: collarGeometry, material: capMat, y: 0.285 });
+    cornerLayers.push({
+      geometry: new THREE.CylinderGeometry(0.16, 0.19, 0.055, 24),
+      material: gemMat,
+      y: 0.5,
+    });
+    cornerLayers.forEach(({ geometry, material }) => {
+      decorGeometries.push(geometry);
+      if (!decorMaterials.includes(material)) decorMaterials.push(material);
+    });
+
+    const corners = [
+      [-edge, -edge],
+      [edge, -edge],
+      [-edge, edge],
+      [edge, edge],
+    ];
+    cornerLayers.forEach(({ geometry, material, y }) => {
+      const instances = new THREE.InstancedMesh(geometry, material, corners.length);
+      const matrix = new THREE.Matrix4();
+      corners.forEach(([x, z], index) => {
+        matrix.makeTranslation(x, y, z);
+        instances.setMatrixAt(index, matrix);
       });
-      decorGroup.add(pillar);
-      const cap = arenaTemplates.get('block')?.clone(true) || new THREE.Mesh(capGeo, capMat);
-      if (cap.isObject3D && !cap.isMesh) normalizeRoot(cap, 0.34);
-      else cap.material = capMat;
-      cap.position.set(x, 0.62, z);
-      cap.traverse((node) => {
-        if (node.isMesh) {
-          if (node.material?.color) node.material.color.setHex(ACCENT);
-          if (node.material?.roughness !== undefined) node.material.roughness = 0.5;
-          node.castShadow = true;
-        }
-      });
-      decorGroup.add(cap);
-    }
-    const ring = new THREE.Mesh(
-      new THREE.TorusGeometry(size * 0.33, 0.018, 6, 48),
-      new THREE.MeshBasicMaterial({ color: ACCENT, transparent: true, opacity: 0.28 })
-    );
-    decorMaterials.push(ring.material);
-    ring.rotation.x = -Math.PI / 2;
-    ring.position.y = CELL_Y + 0.018;
-    decorGroup.add(ring);
-    decorGeometries.push(ring.geometry);
+      instances.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+      instances.castShadow = true;
+      instances.receiveShadow = true;
+      instances.frustumCulled = false;
+      instances.renderOrder = 6;
+      decorGroup.add(instances);
+    });
+
     const trophy = arenaTemplates.get('trophy')?.clone(true);
     if (trophy) {
       normalizeRoot(trophy, 0.58);
@@ -451,6 +495,13 @@ export function buildScene(container) {
     seed: 109,
   });
   woodTexture.repeat.set(3.2, 1);
+  const tileTexture = makeSurfaceTexture(renderer, {
+    base: [214, 229, 234],
+    noise: 7,
+    weave: true,
+    seed: 211,
+  });
+  tileTexture.repeat.set(1.35, 1.35);
   const contactShadowTexture = makeContactShadowTexture();
   const boardShadowTexture = makeBoardShadowTexture();
 
@@ -513,7 +564,7 @@ export function buildScene(container) {
     makeArenaDecor(size);
     cellMesh = null;
     boardShadow = null;
-    cellGeo = new RoundedBoxGeometry(0.86, 0.105, 0.86, 2, 0.045);
+    cellGeo = new RoundedBoxGeometry(0.86, 0.105, 0.86, 3, 0.055);
 
     // 四块实木墙拼成真正的框
     const frameOuter = size + 1.35;
@@ -541,8 +592,8 @@ export function buildScene(container) {
     const railY = 0.28;
     const railH = 0.035;
     const railW = 0.04;
-    const railLong = new THREE.BoxGeometry(size + 0.44, railH, railW);
-    const railShort = new THREE.BoxGeometry(railW, railH, size + 0.44);
+    const railLong = new RoundedBoxGeometry(size + 0.44, railH, railW, 3, 0.018);
+    const railShort = new RoundedBoxGeometry(railW, railH, size + 0.44, 3, 0.018);
     for (const [x, z, geo] of [
       [0, railOffset, railLong],
       [0, -railOffset, railLong],
@@ -576,9 +627,11 @@ export function buildScene(container) {
     // 绒布底板:下沉 0.145,格子像浮雕一样浮在底板上
     const slab = new THREE.Mesh(
       new RoundedBoxGeometry(size + 0.22, 0.22, size + 0.22, 4, 0.07),
-      new THREE.MeshLambertMaterial({
+      new THREE.MeshStandardMaterial({
         color: 0x263b4d,
         map: feltTexture,
+        roughness: 0.78,
+        metalness: 0.015,
       })
     );
     slab.position.y = 0.045;
@@ -586,10 +639,15 @@ export function buildScene(container) {
     baseGroup.add(slab);
 
     // 格子合并为一次实例化绘制。颜色仍交替,高密盘面也不会逐格增加 draw call。
-    const cellMaterial = new THREE.MeshStandardMaterial({
+    const cellMaterial = new THREE.MeshPhysicalMaterial({
       color: 0xffffff,
-      roughness: 0.64,
-      metalness: 0.04,
+      map: tileTexture,
+      roughness: 0.46,
+      metalness: 0.06,
+      clearcoat: 0.5,
+      clearcoatRoughness: 0.2,
+      sheen: 0.12,
+      sheenColor: 0x8dbec7,
     });
     cellMesh = new THREE.InstancedMesh(cellGeo, cellMaterial, size * size);
     const cellMatrix = new THREE.Matrix4();
@@ -658,40 +716,125 @@ export function buildScene(container) {
       new THREE.Vector2(0.2, 0.24),
       new THREE.Vector2(0.002, 0.28),
     ],
-    20
+    36
   );
+  const tokenBaseGeo = new THREE.LatheGeometry(
+    [
+      new THREE.Vector2(0.015, 0),
+      new THREE.Vector2(0.29, 0),
+      new THREE.Vector2(0.35, 0.018),
+      new THREE.Vector2(0.38, 0.045),
+      new THREE.Vector2(0.37, 0.075),
+      new THREE.Vector2(0.33, 0.098),
+      new THREE.Vector2(0.015, 0.112),
+    ],
+    24
+  );
+  const tokenRingGeo = new THREE.TorusGeometry(0.345, 0.014, 6, 24);
+  tokenRingGeo.rotateX(Math.PI / 2);
 
-  // 回退材质 + 半透明幽灵材质。
+  // 回退材质 + 半透明幽灵材质。Physical materials keep the same
+  // silhouette readable when a GLB is still loading and add a controlled
+  // highlight once the environment map is available.
   const mats = {
-    [BLACK]: new THREE.MeshPhongMaterial({
-      color: 0x050807,
-      specular: 0x55615d,
-      shininess: 38,
+    [BLACK]: new THREE.MeshPhysicalMaterial({
+      color: 0x243d49,
+      roughness: 0.3,
+      metalness: 0.16,
+      clearcoat: 0.52,
+      clearcoatRoughness: 0.2,
+      envMapIntensity: 1.1,
     }),
-    [WHITE]: new THREE.MeshPhongMaterial({
+    [WHITE]: new THREE.MeshPhysicalMaterial({
       color: 0xf4eedf,
-      specular: 0xffffff,
-      shininess: 68,
+      roughness: 0.24,
+      metalness: 0.08,
+      clearcoat: 0.62,
+      clearcoatRoughness: 0.16,
+      envMapIntensity: 1.15,
     }),
   };
   const ghostMats = {
-    [BLACK]: new THREE.MeshPhongMaterial({
-      color: 0x101719,
-      specular: 0x34413c,
-      shininess: 34,
+    [BLACK]: new THREE.MeshPhysicalMaterial({
+      color: 0x2e5664,
+      roughness: 0.32,
+      metalness: 0.12,
+      clearcoat: 0.42,
+      clearcoatRoughness: 0.22,
       transparent: true,
       opacity: 0.52,
       depthWrite: false,
     }),
-    [WHITE]: new THREE.MeshPhongMaterial({
+    [WHITE]: new THREE.MeshPhysicalMaterial({
       color: 0xf4efe2,
-      specular: 0xffffff,
-      shininess: 52,
+      roughness: 0.26,
+      metalness: 0.06,
+      clearcoat: 0.5,
+      clearcoatRoughness: 0.18,
       transparent: true,
       opacity: 0.52,
       depthWrite: false,
     }),
   };
+
+  const tokenBaseMats = {
+    [BLACK]: new THREE.MeshPhysicalMaterial({
+      color: 0x193744,
+      roughness: 0.24,
+      metalness: 0.58,
+      clearcoat: 0.72,
+      clearcoatRoughness: 0.14,
+      emissive: 0x08242a,
+      emissiveIntensity: 0.12,
+    }),
+    [WHITE]: new THREE.MeshPhysicalMaterial({
+      color: 0xd8e3e3,
+      roughness: 0.2,
+      metalness: 0.3,
+      clearcoat: 0.78,
+      clearcoatRoughness: 0.13,
+      emissive: 0x30464a,
+      emissiveIntensity: 0.045,
+    }),
+  };
+  const tokenRingMats = {
+    [BLACK]: new THREE.MeshPhysicalMaterial({
+      color: 0x67d8c5,
+      roughness: 0.18,
+      metalness: 0.55,
+      clearcoat: 0.7,
+      clearcoatRoughness: 0.12,
+      emissive: 0x1b806e,
+      emissiveIntensity: 0.22,
+    }),
+    [WHITE]: new THREE.MeshPhysicalMaterial({
+      color: 0xffc26d,
+      roughness: 0.18,
+      metalness: 0.58,
+      clearcoat: 0.7,
+      clearcoatRoughness: 0.12,
+      emissive: 0x8a4d18,
+      emissiveIntensity: 0.16,
+    }),
+  };
+  const ghostTokenBaseMats = {
+    [BLACK]: tokenBaseMats[BLACK].clone(),
+    [WHITE]: tokenBaseMats[WHITE].clone(),
+  };
+  const ghostTokenRingMats = {
+    [BLACK]: tokenRingMats[BLACK].clone(),
+    [WHITE]: tokenRingMats[WHITE].clone(),
+  };
+  Object.values(ghostTokenBaseMats).forEach((material) => {
+    material.transparent = true;
+    material.opacity = 0.45;
+    material.depthWrite = false;
+  });
+  Object.values(ghostTokenRingMats).forEach((material) => {
+    material.transparent = true;
+    material.opacity = 0.5;
+    material.depthWrite = false;
+  });
 
   const pieceGeos = { [BLACK]: fallbackPieceGeo, [WHITE]: fallbackPieceGeo };
   const petMats = { [BLACK]: mats[BLACK], [WHITE]: mats[WHITE] };
@@ -702,11 +845,28 @@ export function buildScene(container) {
     [BLACK]: new THREE.InstancedMesh(pieceGeos[BLACK], petMats[BLACK], 18 * 18),
     [WHITE]: new THREE.InstancedMesh(pieceGeos[WHITE], petMats[WHITE], 18 * 18),
   };
+  const tokenBaseInstances = {
+    [BLACK]: new THREE.InstancedMesh(tokenBaseGeo, tokenBaseMats[BLACK], 18 * 18),
+    [WHITE]: new THREE.InstancedMesh(tokenBaseGeo, tokenBaseMats[WHITE], 18 * 18),
+  };
+  const tokenRingInstances = {
+    [BLACK]: new THREE.InstancedMesh(tokenRingGeo, tokenRingMats[BLACK], 18 * 18),
+    [WHITE]: new THREE.InstancedMesh(tokenRingGeo, tokenRingMats[WHITE], 18 * 18),
+  };
   for (const instances of Object.values(pieceInstances)) {
     instances.count = 0;
     instances.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     instances.castShadow = true;
     instances.frustumCulled = false;
+    pieceGroup.add(instances);
+  }
+  for (const instances of [...Object.values(tokenBaseInstances), ...Object.values(tokenRingInstances)]) {
+    instances.count = 0;
+    instances.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    instances.castShadow = true;
+    instances.receiveShadow = true;
+    instances.frustumCulled = false;
+    instances.renderOrder = 5;
     pieceGroup.add(instances);
   }
   const contactShadowGeo = new THREE.CircleGeometry(0.52, 16);
@@ -728,12 +888,16 @@ export function buildScene(container) {
   contactShadows.renderOrder = 1;
   pieceGroup.add(contactShadows);
   const pieceMatrix = new THREE.Matrix4();
+  const tokenBaseMatrix = new THREE.Matrix4();
+  const tokenRingMatrix = new THREE.Matrix4();
   const shadowMatrix = new THREE.Matrix4();
   const pieces = [];
   const pieceByCell = new Map();
 
   function rebuildPieceInstances() {
     const counts = { [BLACK]: 0, [WHITE]: 0 };
+    const baseCounts = { [BLACK]: 0, [WHITE]: 0 };
+    const ringCounts = { [BLACK]: 0, [WHITE]: 0 };
     let shadowCount = 0;
     for (const piece of pieces) {
       if (!piece.active) continue;
@@ -743,10 +907,20 @@ export function buildScene(container) {
       const index = counts[piece.color]++;
       pieceMatrix.makeTranslation(cellX(piece.c), PIECE_Y, cellZ(piece.r));
       pieceInstances[piece.color].setMatrixAt(index, pieceMatrix);
+      const baseIndex = baseCounts[piece.color]++;
+      tokenBaseMatrix.makeTranslation(cellX(piece.c), TOKEN_BASE_Y, cellZ(piece.r));
+      tokenBaseInstances[piece.color].setMatrixAt(baseIndex, tokenBaseMatrix);
+      const ringIndex = ringCounts[piece.color]++;
+      tokenRingMatrix.makeTranslation(cellX(piece.c), TOKEN_RING_Y, cellZ(piece.r));
+      tokenRingInstances[piece.color].setMatrixAt(ringIndex, tokenRingMatrix);
     }
     for (const color of [BLACK, WHITE]) {
       pieceInstances[color].count = counts[color];
       pieceInstances[color].instanceMatrix.needsUpdate = true;
+      tokenBaseInstances[color].count = baseCounts[color];
+      tokenBaseInstances[color].instanceMatrix.needsUpdate = true;
+      tokenRingInstances[color].count = ringCounts[color];
+      tokenRingInstances[color].instanceMatrix.needsUpdate = true;
     }
     contactShadows.count = shadowCount;
     contactShadows.instanceMatrix.needsUpdate = true;
@@ -772,11 +946,20 @@ export function buildScene(container) {
     let piece = pieceByCell.get(key);
     if (!piece) {
       const mesh = new THREE.Mesh(pieceGeos[BLACK], petMats[BLACK]);
+      const base = new THREE.Mesh(tokenBaseGeo, tokenBaseMats[BLACK]);
+      const ring = new THREE.Mesh(tokenRingGeo, tokenRingMats[BLACK]);
+      base.position.y = TOKEN_BASE_Y - PIECE_Y;
+      ring.position.y = TOKEN_RING_Y - PIECE_Y;
+      base.castShadow = true;
+      base.receiveShadow = true;
+      ring.castShadow = true;
+      ring.receiveShadow = true;
+      mesh.add(base, ring);
       mesh.castShadow = false;
       mesh.position.set(cellX(c), PIECE_Y, cellZ(r));
       mesh.visible = false;
       pieceGroup.add(mesh);
-      piece = { mesh, r, c, color: EMPTY, active: false, animationRefs: 0 };
+      piece = { mesh, base, ring, r, c, color: EMPTY, active: false, animationRefs: 0 };
       pieceByCell.set(key, piece);
       pieces.push(piece);
     }
@@ -787,10 +970,17 @@ export function buildScene(container) {
     piece.color = color;
     piece.mesh.geometry = pieceGeos[color] || fallbackPieceGeo;
     piece.mesh.material = petMats[color] || mats[color];
+    piece.base.material = tokenBaseMats[color] || tokenBaseMats[BLACK];
+    piece.ring.material = tokenRingMats[color] || tokenRingMats[BLACK];
   }
 
   // 幽灵棋子:跟随鼠标在合法格上浮动预览。
   const ghost = new THREE.Mesh(pieceGeos[BLACK], ghostMats[BLACK]);
+  const ghostBase = new THREE.Mesh(tokenBaseGeo, ghostTokenBaseMats[BLACK]);
+  const ghostRing = new THREE.Mesh(tokenRingGeo, ghostTokenRingMats[BLACK]);
+  ghostBase.position.y = TOKEN_BASE_Y - (CELL_Y + 0.07);
+  ghostRing.position.y = TOKEN_RING_Y - (CELL_Y + 0.07);
+  ghost.add(ghostBase, ghostRing);
   ghost.visible = false;
   ghost.castShadow = false;
   ghost.receiveShadow = false;
@@ -840,6 +1030,37 @@ export function buildScene(container) {
     return merged ? normalizePetGeometry(merged) : null;
   }
 
+  function makePetMaterial(sourceMaterial, color) {
+    const source = Array.isArray(sourceMaterial) ? sourceMaterial[0] : sourceMaterial;
+    if (!source) return mats[color].clone();
+    const material = new THREE.MeshPhysicalMaterial({
+      color: source.color?.clone?.() || mats[color].color.clone(),
+      map: source.map || null,
+      normalMap: source.normalMap || null,
+      normalScale: source.normalScale?.clone?.() || new THREE.Vector2(1, 1),
+      roughnessMap: source.roughnessMap || null,
+      metalnessMap: source.metalnessMap || null,
+      aoMap: source.aoMap || null,
+      aoMapIntensity: source.aoMapIntensity ?? 1,
+      emissive: source.emissive?.clone?.() || new THREE.Color(0x000000),
+      emissiveMap: source.emissiveMap || null,
+      alphaMap: source.alphaMap || null,
+      alphaTest: source.alphaTest || 0,
+      transparent: source.transparent || false,
+      opacity: source.opacity ?? 1,
+      side: source.side ?? THREE.FrontSide,
+      roughness: 0.38,
+      metalness: 0.08,
+      clearcoat: 0.48,
+      clearcoatRoughness: 0.2,
+      sheen: 0.12,
+      envMapIntensity: 1.08,
+    });
+    material.name = `${source.name || 'pet'}-premium`;
+    material.needsUpdate = true;
+    return material;
+  }
+
   function usePetAsset(color, gltf) {
     const root = gltf.scene;
     petRoots.set(color, root);
@@ -847,13 +1068,13 @@ export function buildScene(container) {
     const geometry = mergedPetGeometry(root);
     if (!geometry) return;
     const source = root.getObjectByProperty('isMesh', true);
-    const material = source?.material?.clone?.() || mats[color].clone();
-    material.roughness = 0.58;
-    material.metalness = 0.08;
-    material.envMapIntensity = 0.7;
+    const material = makePetMaterial(source?.material, color);
     if (color === BLACK && material.color) {
       // 黑方仍保留猫咪的眼睛与轮廓,整体压到深蓝灰以保持两方一眼可分。
-      material.color.setHex(0x263844);
+      material.color.setHex(0x06151c);
+      material.envMapIntensity = 0.72;
+      material.roughness = 0.44;
+      material.clearcoat = 0.34;
     }
     material.needsUpdate = true;
     const ghostMaterial = material.clone();
@@ -869,6 +1090,8 @@ export function buildScene(container) {
       if (piece.color === color) {
         piece.mesh.geometry = geometry;
         piece.mesh.material = material;
+        piece.base.material = tokenBaseMats[color];
+        piece.ring.material = tokenRingMats[color];
       }
     }
     if (color === BLACK) ghost.geometry = geometry;
@@ -1086,6 +1309,8 @@ export function buildScene(container) {
     ghost.visible = true;
     ghost.geometry = pieceGeos[color] || fallbackPieceGeo;
     ghost.material = ghostPetMats[color] || ghostMats[color];
+    ghostBase.material = ghostTokenBaseMats[color] || ghostTokenBaseMats[BLACK];
+    ghostRing.material = ghostTokenRingMats[color] || ghostTokenRingMats[BLACK];
     ghost.position.set(cellX(c), CELL_Y + 0.07, cellZ(r));
   }
 
@@ -1117,12 +1342,16 @@ export function buildScene(container) {
         ease: easings.easeInQuad,
         update: (e) => {
           piece.mesh.position.y = PIECE_Y + 2.8 * (1 - e);
+          piece.mesh.position.x = cellX(piece.c) + Math.sin(e * Math.PI * 2.2) * 0.12 * (1 - e);
+          piece.mesh.position.z = cellZ(piece.r) + Math.cos(e * Math.PI * 2.2) * 0.07 * (1 - e);
           const landing = Math.max(0, (e - 0.82) / 0.18);
           const squash = Math.sin(landing * Math.PI);
-          piece.mesh.scale.set(1 + squash * 0.08, 1 - squash * 0.12, 1 + squash * 0.08);
-          piece.mesh.rotation.z = Math.sin(e * Math.PI * 2.4) * 0.035 * (1 - e);
+          piece.mesh.scale.set(1 + squash * 0.11, 1 - squash * 0.16, 1 + squash * 0.11);
+          piece.mesh.rotation.z = Math.sin(e * Math.PI * 2.4) * 0.06 * (1 - e);
         },
         done: () => {
+          piece.mesh.position.x = cellX(piece.c);
+          piece.mesh.position.z = cellZ(piece.r);
           piece.mesh.position.y = PIECE_Y;
           piece.mesh.scale.set(1, 1, 1);
           piece.mesh.rotation.z = 0;
