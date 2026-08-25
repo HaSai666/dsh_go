@@ -997,8 +997,6 @@ svg {
 }
 
 .card {
-  --tone: var(--gold);
-  --tone-rgb: 242 189 99;
   position: relative;
   display: grid;
   grid-template-rows: 1fr auto;
@@ -1085,18 +1083,51 @@ svg {
 }
 
 .card-art {
+  position: relative;
+  isolation: isolate;
   display: grid;
   place-items: center;
   width: 34px;
   height: 34px;
+  overflow: hidden;
   color: var(--tone);
-  border-radius: 6px;
-  background: rgb(var(--tone-rgb) / 0.09);
+  border: 1px solid rgb(var(--tone-rgb) / 0.36);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 32% 23%, rgb(255 255 255 / 0.3) 0 6%, transparent 7%),
+    linear-gradient(145deg, rgb(var(--tone-rgb) / 0.22), rgb(var(--tone-rgb) / 0.06) 68%),
+    #111a17;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.2),
+    inset 0 -3px 5px rgb(0 0 0 / 0.34),
+    0 4px 8px rgb(0 0 0 / 0.28);
+}
+
+.card-art::after,
+.tooltip-card-art::after,
+.reward-icon::after {
+  position: absolute;
+  inset: 3px;
+  z-index: -1;
+  content: "";
+  pointer-events: none;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  border-radius: inherit;
+}
+
+.game-card-icon {
+  display: block;
+  width: 62%;
+  height: 62%;
+  flex: 0 0 auto;
+  background: currentColor;
+  -webkit-mask: var(--card-icon) center / contain no-repeat;
+  mask: var(--card-icon) center / contain no-repeat;
 }
 
 .card-art svg {
-  width: 23px;
-  height: 23px;
+  width: 68%;
+  height: 68%;
 }
 
 .card-name {
@@ -1151,9 +1182,26 @@ svg {
   color: var(--tone);
 }
 
-.tooltip-title svg {
-  width: 17px;
-  height: 17px;
+.tooltip-card-art {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  place-items: center;
+  width: 25px;
+  height: 25px;
+  overflow: hidden;
+  flex: 0 0 auto;
+  border: 1px solid rgb(var(--tone-rgb) / 0.34);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 32% 23%, rgb(255 255 255 / 0.28) 0 6%, transparent 7%),
+    rgb(var(--tone-rgb) / 0.11);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.14);
+}
+
+.tooltip-card-art svg {
+  width: 62%;
+  height: 62%;
 }
 
 .tooltip-title b {
@@ -1283,8 +1331,6 @@ svg {
 }
 
 .reward-opt {
-  --tone: var(--gold);
-  --tone-rgb: 242 189 99;
   position: relative;
   display: grid;
   align-content: start;
@@ -1335,20 +1381,30 @@ svg {
 }
 
 .reward-icon {
+  position: relative;
+  isolation: isolate;
   display: grid;
   place-items: center;
   width: 45px;
   height: 45px;
   margin-bottom: 12px;
+  overflow: hidden;
   color: var(--tone);
-  border: 1px solid rgb(var(--tone-rgb) / 0.24);
-  border-radius: 7px;
-  background: rgb(var(--tone-rgb) / 0.09);
+  border: 1px solid rgb(var(--tone-rgb) / 0.36);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 32% 23%, rgb(255 255 255 / 0.3) 0 6%, transparent 7%),
+    linear-gradient(145deg, rgb(var(--tone-rgb) / 0.2), rgb(var(--tone-rgb) / 0.06) 68%),
+    #111a17;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.2),
+    inset 0 -4px 6px rgb(0 0 0 / 0.32),
+    0 5px 10px rgb(0 0 0 / 0.25);
 }
 
 .reward-icon svg {
-  width: 25px;
-  height: 25px;
+  width: 62%;
+  height: 62%;
 }
 
 .reward-text {

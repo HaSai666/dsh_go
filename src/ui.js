@@ -47,6 +47,15 @@ const UI_ICONS = {
   Zap,
 };
 
+const CARD_ART_ROOT = `${import.meta.env.BASE_URL}assets/kenney/board-game-icons/cards`;
+
+function renderMetaIcon(meta) {
+  if (meta.art) {
+    return `<span class="game-card-icon" style="--card-icon: url('${CARD_ART_ROOT}/${meta.art}.png')"></span>`;
+  }
+  return `<i data-lucide="${meta.icon || 'sparkles'}"></i>`;
+}
+
 function refreshIcons() {
   createIcons({
     icons: UI_ICONS,
@@ -482,7 +491,7 @@ export class UI {
       btn.className = `card tone-${meta.tone}`;
       btn.dataset.id = id;
       btn.dataset.index = idx;
-      btn.innerHTML = `<span class="card-cost" aria-hidden="true">${meta.cost}</span><span class="card-art" aria-hidden="true"><i data-lucide="${meta.icon}"></i></span><span class="card-name">${meta.name}</span>`;
+      btn.innerHTML = `<span class="card-cost" aria-hidden="true">${meta.cost}</span><span class="card-art" aria-hidden="true">${renderMetaIcon(meta)}</span><span class="card-name">${meta.name}</span>`;
       btn.setAttribute('aria-label', `${meta.name},费用 ${meta.cost}:${meta.desc}`);
       if (selectable) {
         const order = this.cardQueue.indexOf(idx);
@@ -544,7 +553,7 @@ export class UI {
 
   cardTip(meta) {
     const cost = meta.cost ? ` · 行动力 ${meta.cost}` : '';
-    return `<span class="tooltip-title tone-${meta.tone || 'amber'}"><i data-lucide="${meta.icon || 'sparkles'}"></i><b>${meta.name}${cost}</b></span><span class="tooltip-desc">${meta.desc}</span>`;
+    return `<span class="tooltip-title tone-${meta.tone || 'amber'}"><span class="tooltip-card-art" aria-hidden="true">${renderMetaIcon(meta)}</span><b>${meta.name}${cost}</b></span><span class="tooltip-desc">${meta.desc}</span>`;
   }
 
   showTooltip(el, html) {
@@ -599,7 +608,7 @@ export class UI {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = `reward-opt tone-${meta.tone || 'amber'}`;
-      btn.innerHTML = `<span class="reward-icon" aria-hidden="true"><i data-lucide="${meta.icon || 'sparkles'}"></i></span>
+      btn.innerHTML = `<span class="reward-icon" aria-hidden="true">${renderMetaIcon(meta)}</span>
         <span class="reward-text"><b>${kindText} · ${meta.name}</b><span>${meta.desc}</span></span>`;
       btn.setAttribute('aria-label', `${kindText} ${meta.name}:${meta.desc}`);
       btn.addEventListener('click', () => {
